@@ -1,0 +1,189 @@
+import * as vscode from 'vscode';
+import { BaseTool } from './baseTool';
+import { ToolDefinition } from '../types';
+
+/**
+ * 运行命令工具
+ */
+export class RunCommandTool extends BaseTool {
+    definition: ToolDefinition = {
+        name: 'run_command',
+        description: '在终端中运行命令',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                command: {
+                    type: 'string',
+                    description: '要执行的命令'
+                },
+                cwd: {
+                    type: 'string',
+                    description: '工作目录（可选，默认为工作区根目录）'
+                },
+                name: {
+                    type: 'string',
+                    description: '终端名称（可选）',
+                    default: 'AI Agent'
+                }
+            },
+            required: ['command']
+        }
+    };
+
+    async execute(params: Record<string, unknown>): Promise<unknown> {
+        this.validateParams(params);
+        
+        const command = params.command as string;
+        const cwd = params.cwd as string || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const name = params.name as string || 'AI Agent';
+
+        // 创建或获取终端
+        let terminal = vscode.window.terminals.find(t => t.name === name);
+        if (!terminal) {
+            terminal = vscode.window.createTerminal({
+                name,
+                cwd
+            });
+        }
+
+        terminal.show();
+        terminal.sendText(command);
+
+        return {
+            success: true,
+            message: `命令已发送到终端: ${command}`,
+            terminalName: name
+        };
+    }
+}
+
+/**
+ * 获取诊断信息工具
+ */
+export class GetDiagnosticsTool extends BaseTool {
+    definition: ToolDefinition = {
+        name: 'get_diagnostics',
+        description: '获取文件或工作区的诊断信息（错误、警告等）',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                path: {
+                    type: 'string',
+                    description: '文件路径（可选，不填则获取所有诊断）'
+                },
+                severity: {
+                    type: 'string',
+                    description: '严重性过滤：error, warning, information, hint',
+                    default: 'all'
+                }
+            },
+            required: []
+        }
+    };
+
+    async execute(params: Record<string, unknown>): Promise<unknown> {
+        const filePath = params.path as string | undefined;
+        const severity = params.severity as string || 'all';
+
+        let diagnostics: [vscode.Uri, vscode.Diagnostic[]][];
+
+        if (filePath) {
+            const uri = vscode.Uri.file(filePath);
+            const fileDiagnostics = vscode.languages.getDiagnostics(uri);
+            diagnostics = [[uri, fileDiagnostics]];
+        } else {
+            diagnostics = vscode.languages.getDiagnostics();
+        }
+
+        const results = diagnostics.flatMap(([uri, diags]) => 
+            diags
+                .filter(d => this.matchSeverity(d.severity, severity))
+                .map(d => ({
+                    file: uri.fsPath,
+                    line: d.range.start.line + 1,
+                    column: d.range.start.character + 1,
+                    message: d.message,
+                    severity: this.getSeverityString(d.severity),
+                    source: d.source
+                }))
+        );
+
+        return { diagnostics: results, totalCount: results.length };
+    }
+
+    private matchSeverity(diagSeverity: vscode.DiagnosticSeverity, filter: string): boolean {
+        if (filter === 'all') {return true;}
+        const severityMap: Record<string, vscode.DiagnosticSeverity> = {
+            'error': vscode.DiagnosticSeverity.Error,
+            'warning': vscode.DiagnosticSeverity.Warning,
+            'information': vscode.DiagnosticSeverity.Information,
+            'hint': vscode.DiagnosticSeverity.Hint
+        };
+        return severityMap[filter] === diagSeverity;
+    }
+
+    private getSeverityString(severity: vscode.DiagnosticSeverity): string {
+        const map = ['Error', 'Warning', 'Information', 'Hint'];
+        return map[severity] || 'Unknown';
+    }
+}
+
+/**
+ * 打开文件工具
+ */
+export class OpenFileTool extends BaseTool {
+    definition: ToolDefinition = {
+        name: 'open_file',
+        description: '在编辑器中打开文件',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                path: {
+                    type: 'string',
+                    description: '文件路径'
+                },
+                line: {
+                    type: 'number',
+                    description: '跳转到指定行（可选）'
+                },
+                column: {
+                    type: 'number',
+                    description: '跳转到指定列（可选）'
+                },
+                preview: {
+                    type: 'boolean',
+                    description: '是否以预览模式打开',
+                    default: true
+                }
+            },
+            required: ['path']
+        }
+    };
+
+    async execute(params: Record<string, unknown>): Promise<unknown> {
+        this.validateParams(params);
+        
+        const filePath = params.path as string;
+        const line = params.line as number | undefined;
+        const column = params.column as number | undefined;
+        const preview = params.preview as boolean ?? true;
+
+        const uri = vscode.Uri.file(filePath);
+        const options: vscode.TextDocumentShowOptions = {
+            preview
+        };
+
+        if (line !== undefined) {
+            const position = new vscode.Position(
+                Math.max(0, line - 1),
+                Math.max(0, (column || 1) - 1)
+            );
+            options.selection = new vscode.Range(position, position);
+        }
+
+        const document = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(document, options);
+
+        return { success: true, path: uri.fsPath };
+    }
+}

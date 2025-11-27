@@ -1,0 +1,219 @@
+{
+  "name": "ai-agent-tools",
+  "displayName": "AI Agent Tools",
+  "description": "为后端AI智能体提供工具和代码库管理的VS Code扩展",
+  "version": "0.0.1",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.106.1"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "AI",
+    "Agent",
+    "Tools",
+    "MCP",
+    "Code Management"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiAgentTools.startServer",
+        "title": "AI Agent Tools: 启动工具服务器",
+        "icon": "$(play)"
+      },
+      {
+        "command": "aiAgentTools.stopServer",
+        "title": "AI Agent Tools: 停止工具服务器",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "aiAgentTools.showStatus",
+        "title": "AI Agent Tools: 显示服务状态"
+      },
+      {
+        "command": "aiAgentTools.openSettings",
+        "title": "AI Agent Tools: 打开配置",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "aiAgentTools.copyServerInfo",
+        "title": "AI Agent Tools: 复制服务器配置信息"
+      },
+      {
+        "command": "aiAgentTools.connectAgent",
+        "title": "AI Agent Tools: 连接智能体服务",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "aiAgentTools.disconnectAgent",
+        "title": "AI Agent Tools: 断开智能体服务",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "aiAgentTools.openChat",
+        "title": "AI Agent Tools: 打开消息面板",
+        "icon": "$(comment-discussion)"
+      }
+    ],
+    "configuration": {
+      "title": "AI Agent Tools",
+      "properties": {
+        "aiAgentTools.serverPort": {
+          "type": "number",
+          "default": 9527,
+          "description": "MCP 工具服务器监听端口",
+          "order": 1
+        },
+        "aiAgentTools.teamConfig.id": {
+          "type": "number",
+          "default": 1,
+          "description": "团队配置 ID（必需）",
+          "order": 2
+        },
+        "aiAgentTools.teamConfig.codebase": {
+          "type": "string",
+          "default": "",
+          "description": "代码库根路径（必需，如 /root/project/）",
+          "order": 3
+        },
+        "aiAgentTools.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "扩展激活时自动启动服务器",
+          "order": 4
+        },
+        "aiAgentTools.enableFileOperations": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用文件操作工具"
+        },
+        "aiAgentTools.enableCodeSearch": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用代码搜索工具"
+        },
+        "aiAgentTools.enableTerminal": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用终端操作工具"
+        },
+        "aiAgentTools.authToken": {
+          "type": "string",
+          "default": "",
+          "description": "认证令牌（可选，用于验证后端智能体请求）"
+        },
+        "aiAgentTools.agentServer.url": {
+          "type": "string",
+          "default": "ws://agent-flow.dev.csst.lab.zverse.space:32080",
+          "description": "后端智能体服务地址（WebSocket）",
+          "order": 5
+        },
+        "aiAgentTools.agentServer.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "扩展激活时自动连接智能体服务",
+          "order": 6
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiAgentTools",
+          "title": "AI Agent Tools",
+          "icon": "$(robot)"
+        }
+      ]
+    },
+    "views": {
+      "aiAgentTools": [
+        {
+          "id": "aiAgentTools.status",
+          "name": "服务状态"
+        },
+        {
+          "id": "aiAgentTools.config",
+          "name": "连接配置"
+        },
+        {
+          "id": "aiAgentTools.tools",
+          "name": "可用工具"
+        },
+        {
+          "id": "aiAgentTools.chat",
+          "name": "智能体消息",
+          "type": "webview"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "aiAgentTools.startServer",
+          "when": "view == aiAgentTools.status",
+          "group": "navigation"
+        },
+        {
+          "command": "aiAgentTools.stopServer",
+          "when": "view == aiAgentTools.status",
+          "group": "navigation"
+        },
+        {
+          "command": "aiAgentTools.openSettings",
+          "when": "view == aiAgentTools.config",
+          "group": "navigation"
+        },
+        {
+          "command": "aiAgentTools.connectAgent",
+          "when": "view == aiAgentTools.chat",
+          "group": "navigation"
+        },
+        {
+          "command": "aiAgentTools.disconnectAgent",
+          "when": "view == aiAgentTools.chat",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.106.1",
+    "@types/ws": "^8.18.1",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.39.1",
+    "ts-loader": "^9.5.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.3",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "optionalDependencies": {
+    "bufferutil": "^4.0.9",
+    "utf-8-validate": "^6.0.5"
+  }
+}
