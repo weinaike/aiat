@@ -282,6 +282,20 @@ npm run publish:dry-run
    - 推送到远程仓库
    - 发布到 VS Code 市场
 
+### 构建VSIX包
+
+如果你想创建VSIX包进行本地安装或分发：
+
+```bash
+# 构建VSIX包
+npm run vsix
+
+# 构建并本地安装（需要VS Code）
+npm run vsix:install
+```
+
+VSIX包会生成在项目根目录：`aiat-x.x.x.vsix`
+
 ### 手动发布步骤
 
 如果你想手动发布，可以按以下步骤：
@@ -292,23 +306,28 @@ npm run publish:dry-run
    npm version patch  # 或 minor, major
    ```
 
-2. **更新 CHANGELOG**
+2. **构建VSIX包（可选）**
+   ```bash
+   npm run vsix
+   ```
+
+3. **更新 CHANGELOG**
    - 在 CHANGELOG.md 中添加新版本条目
    - 记录新功能、修复和改进
 
-3. **构建项目**
+4. **构建项目**
    ```bash
    npm run compile
    npm run package
    ```
 
-4. **创建 Git 标签**
+5. **创建 Git 标签**
    ```bash
-   git tag -a v0.0.3 -m "发布版本 v0.0.3"
-   git push origin v0.0.3
+   git tag -a v0.0.4 -m "发布版本 v0.0.4"
+   git push origin v0.0.4
    ```
 
-5. **发布到 VS Code 市场**
+6. **发布到 VS Code 市场**
    ```bash
    # 需要先安装 vsce
    npm install -g vsce
