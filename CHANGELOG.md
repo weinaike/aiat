@@ -4,6 +4,14 @@ All notable changes to the "AIAT" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.4] - 2025-11-28
+
+### 新增功能
+
+### 修复问题
+
+### 技术细节
+
 ## [0.0.3] - 2025-11-28
 
 ### Added
