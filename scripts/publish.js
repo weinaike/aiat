@@ -60,13 +60,32 @@ function checkWorkingTreeClean() {
 
 // 运行测试
 function runTests() {
+  // 检查是否跳过测试
+  if (process.argv.includes('--skip-tests')) {
+    log('⚠️ --skip-tests 参数存在，跳过测试', 'yellow');
+    log('✅ 跳过测试', 'green');
+    return true;
+  }
+
   log('🧪 运行测试...', 'blue');
   try {
+    // 检查是否在无GUI环境下运行
+    if (!process.env.DISPLAY) {
+      log('⚠️ 检测到无GUI环境，跳过VS Code集成测试', 'yellow');
+      log('✅ 跳过测试 - 无GUI环境', 'green');
+      return true;
+    }
+
     execSync('npm test', { stdio: 'inherit' });
     log('✅ 所有测试通过', 'green');
     return true;
   } catch (error) {
     log('❌ 测试失败', 'red');
+    // 允许用户选择是否继续
+    if (process.argv.includes('--force')) {
+      log('⚠️ --force 参数存在，跳过测试失败继续发布', 'yellow');
+      return true;
+    }
     return false;
   }
 }
@@ -164,6 +183,12 @@ function commitChanges(version) {
 
 // 推送到远程仓库
 function pushToRemote(version) {
+  if (process.argv.includes('--dry-run')) {
+    log('🔍 DRY RUN: 跳过推送到远程仓库', 'yellow');
+    log('✅ DRY RUN: 模拟推送成功', 'green');
+    return true;
+  }
+
   log(`🚀 推送到远程仓库...`, 'blue');
   try {
     execSync('git push', { stdio: 'inherit' });
@@ -178,6 +203,12 @@ function pushToRemote(version) {
 
 // 发布到VS Code市场
 function publishToVSCode() {
+  if (process.argv.includes('--dry-run')) {
+    log('🔍 DRY RUN: 跳过发布到VS Code市场', 'yellow');
+    log('✅ DRY RUN: 模拟发布成功', 'green');
+    return true;
+  }
+
   log('📦 发布到VS Code市场...', 'blue');
   try {
     // 检查是否安装了vsce
@@ -202,6 +233,12 @@ async function main() {
 
   log('🚀 AIAT VS Code扩展一键发布工具', 'cyan');
   log('='.repeat(50), 'cyan');
+
+  // 显示运行参数
+  const args = process.argv.slice(2);
+  if (args.length > 0) {
+    log(`📋 运行参数: ${args.join(', ')}`, 'blue');
+  }
 
   const packageInfo = getPackageInfo();
   const version = packageInfo.version;
