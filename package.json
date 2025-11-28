@@ -2,7 +2,7 @@
   "name": "aiat",
   "displayName": "AIAT",
   "description": "AI Assistant Toolkit - AI智能体开发工具包，提供MCP协议支持、代码分析和智能体通信功能",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "weinaike",
   "engines": {
     "vscode": "^1.106.1"
