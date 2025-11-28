@@ -286,7 +286,7 @@ export class StateManager {
 
             case 'result':
                 const resultData = message.data;
-                const resultStatus = resultData?.status;
+                const resultStatus = message.status;  // 🎯 修复：从消息的顶级获取status
 
                 if (resultStatus === 'complete') {
                     taskState = 'completed';
@@ -297,16 +297,13 @@ export class StateManager {
                 break;
 
             case 'completion':
-                const completionStatus = message.status;
-
-                if (completionStatus === 'cancelled' || completionStatus === 'completed') {
-                    // 任务被取消或完成，设置为相应状态
-                    if (completionStatus === 'cancelled') {
-                        // 取消的任务转换为 idle，允许重新启动
-                        taskState = 'idle';
-                    } else if (completionStatus === 'completed') {
-                        taskState = 'completed';
-                    }
+                // 任务完成消息，根据状态决定任务状态
+                const completionData = message.data as { status?: string };
+                if (completionData.status === 'cancelled') {
+                    // 任务被取消，设置为 idle 状态
+                    taskState = 'idle';
+                } else if (completionData.status === 'complete') {
+                    taskState = 'completed';
                 }
                 break;
 
@@ -375,7 +372,7 @@ export class StateManager {
      * 同步连接状态对任务状态的影响
      * 注意：只处理连接状态变化对任务状态的影响，任务状态变化不影响连接状态
      */
-    private syncConnectionWithTaskState(oldConnectionState: ConnectionState, newConnectionState: ConnectionState): void {
+    private syncConnectionWithTaskState(_oldConnectionState: ConnectionState, newConnectionState: ConnectionState): void {
         // 连接中断时，任务状态应该回到 idle
         if (newConnectionState === 'closed' || newConnectionState === 'error') {
             if (this._state.task !== 'idle') {

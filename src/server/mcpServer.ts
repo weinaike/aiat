@@ -17,7 +17,7 @@ import {
 } from '../types';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
-const SERVER_NAME = 'vscode-ai-agent-tools';
+const SERVER_NAME = 'vscode-aiat';
 const SERVER_VERSION = '1.0.0';
 
 /**
@@ -37,8 +37,8 @@ export class McpServer {
     constructor(toolRegistry: ToolRegistry, outputChannel: vscode.OutputChannel) {
         this.toolRegistry = toolRegistry;
         this.outputChannel = outputChannel;
-        this.port = vscode.workspace.getConfiguration('aiAgentTools').get('serverPort', 9527);
-        this.authToken = vscode.workspace.getConfiguration('aiAgentTools').get('authToken', '');
+        this.port = vscode.workspace.getConfiguration('aiat').get('serverPort', 9527);
+        this.authToken = vscode.workspace.getConfiguration('aiat').get('authToken', '');
     }
 
     /**
@@ -67,7 +67,7 @@ export class McpServer {
                     this.log(`MCP 服务器已启动，监听端口: ${this.port}`);
                     this.log(`协议版本: ${MCP_PROTOCOL_VERSION}`);
                     vscode.window.showInformationMessage(
-                        `AI Agent Tools MCP 服务器已启动，端口: ${this.port}`
+                        `AIAT MCP 服务器已启动，端口: ${this.port}`
                     );
                     resolve();
                 });
@@ -98,7 +98,7 @@ export class McpServer {
                 this.initialized = false;
                 this.connectedClients = 0;
                 this.log('MCP 服务器已停止');
-                vscode.window.showInformationMessage('AI Agent Tools MCP 服务器已停止');
+                vscode.window.showInformationMessage('AIAT MCP 服务器已停止');
                 resolve();
             });
         });
@@ -292,7 +292,7 @@ export class McpServer {
                 name: SERVER_NAME,
                 version: SERVER_VERSION
             },
-            instructions: '这是一个 VS Code AI Agent Tools 服务器，提供文件操作、代码搜索和终端操作等工具。'
+            instructions: '这是一个 VS Code AIAT 服务器，提供文件操作、代码搜索和终端操作等工具。'
         };
     }
 

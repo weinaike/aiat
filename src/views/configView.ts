@@ -44,23 +44,28 @@ export class ConfigViewProvider implements vscode.TreeDataProvider<ConfigItem> {
     }
 
     getChildren(): ConfigItem[] {
-        const config = vscode.workspace.getConfiguration('aiAgentTools');
+        const config = vscode.workspace.getConfiguration('aiat');
         const port = config.get<number>('serverPort', 9527);
-        const teamId = config.get<number>('teamConfig.id', 1);
-        const codebase = config.get<string>('teamConfig.codebase', '') || this.getDefaultCodebase();
         const authToken = config.get<string>('authToken', '');
         const localIP = getLocalIP();
+        const workspaceRoot = this.getDefaultCodebase();
+
+        // 获取workspace名称
+        const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || '未知项目';
 
         return [
+            new ConfigItem('🖥️ 服务器配置', '', 'header', '$(gear)'),
             new ConfigItem('服务器地址', localIP, 'mcp_server', '$(globe)'),
             new ConfigItem('服务器端口', String(port), 'mcp_port', '$(plug)'),
-            new ConfigItem('团队 ID', String(teamId), 'id', '$(organization)'),
-            new ConfigItem('代码库路径', codebase || '(未配置)', 'codebase', '$(folder)'),
-            new ConfigItem('认证令牌', authToken ? '******' : '(未设置)', 'mcp_token', '$(key)'),
+            new ConfigItem('认证状态', authToken ? '已配置' : '未配置', 'auth_status', authToken ? '$(verified)' : '$(warning)'),
             new ConfigItem('', '', 'divider', ''),
-            new ConfigItem('📋 复制 team_config', '', 'copy', '$(copy)', {
-                command: 'aiAgentTools.copyServerInfo',
-                title: '复制配置'
+            new ConfigItem('📁 工作区信息', '', 'header', '$(folder)'),
+            new ConfigItem('工作区名称', workspaceName, 'workspace_name', '$(project)'),
+            new ConfigItem('代码库路径', workspaceRoot || '(未打开)', 'codebase', '$(folder-opened)'),
+            new ConfigItem('', '', 'divider', ''),
+            new ConfigItem('📋 复制配置', '', 'copy', '$(copy)', {
+                command: 'aiat.copyServerInfo',
+                title: '复制 team_config'
             })
         ];
     }
@@ -74,7 +79,7 @@ export class ConfigViewProvider implements vscode.TreeDataProvider<ConfigItem> {
      * 获取当前 team_config
      */
     getTeamConfig(): TeamConfig {
-        const config = vscode.workspace.getConfiguration('aiAgentTools');
+        const config = vscode.workspace.getConfiguration('aiat');
         const port = config.get<number>('serverPort', 9527);
         const teamId = config.get<number>('teamConfig.id', 1);
         const codebase = config.get<string>('teamConfig.codebase', '') || this.getDefaultCodebase();
@@ -108,10 +113,14 @@ class ConfigItem extends vscode.TreeItem {
         public readonly command?: vscode.Command
     ) {
         super(label, vscode.TreeItemCollapsibleState.None);
-        
+
         if (configKey === 'divider') {
             this.label = '─────────────';
             this.description = '';
+        } else if (configKey === 'header') {
+            this.description = '';
+            this.contextValue = 'header';
+            this.tooltip = '';
         } else if (configKey === 'copy') {
             this.contextValue = 'copyConfig';
         } else {
@@ -119,7 +128,7 @@ class ConfigItem extends vscode.TreeItem {
             this.tooltip = `${label}: ${value}\n点击编辑设置`;
             this.contextValue = 'configItem';
             this.command = {
-                command: 'aiAgentTools.openSettings',
+                command: 'aiat.openSettings',
                 title: '打开设置'
             };
         }
@@ -151,5 +160,5 @@ export async function copyServerInfo(configProvider: ConfigViewProvider): Promis
  * 打开设置页面
  */
 export function openSettings(): void {
-    vscode.commands.executeCommand('workbench.action.openSettings', 'aiAgentTools');
+    vscode.commands.executeCommand('workbench.action.openSettings', 'aiat');
 }

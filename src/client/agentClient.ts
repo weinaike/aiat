@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import WebSocket from 'ws';
 import { StateManager, ConnectionState, TaskState } from './stateManager';
 import { errorHandler, ErrorType, ErrorSeverity } from '../utils/errorHandler';
+import { MessageStorage } from '../utils/messageStorage';
 
 /**
  * 消息类型
@@ -10,8 +11,17 @@ export interface AgentMessage {
     type: string;
     content?: string;
     data?: unknown;
+    source?: string;
     timestamp: number;
     direction: 'incoming' | 'outgoing';
+}
+
+/**
+ * 历史加载完成事件数据
+ */
+export interface HistoryLoadedEvent {
+    runId: string;
+    messages: AgentMessage[];
 }
 
 /**
@@ -28,20 +38,26 @@ export class AgentClient {
 
     private _stateManager = new StateManager();
     private _messages: AgentMessage[] = [];
+    private _messageStorage: MessageStorage;
 
     private _onStateChange = new vscode.EventEmitter<ConnectionState>();
     private _onTaskStateChange = new vscode.EventEmitter<TaskState>();
     private _onMessage = new vscode.EventEmitter<AgentMessage>();
     private _onError = new vscode.EventEmitter<Error>();
+    private _onHistoryLoaded = new vscode.EventEmitter<HistoryLoadedEvent>();
 
     readonly onStateChange = this._onStateChange.event;
     readonly onTaskStateChange = this._onTaskStateChange.event;
     readonly onMessage = this._onMessage.event;
     readonly onError = this._onError.event;
+    readonly onHistoryLoaded = this._onHistoryLoaded.event;
 
     constructor(
-        private outputChannel: vscode.OutputChannel
+        private outputChannel: vscode.OutputChannel,
+        private extensionContext: vscode.ExtensionContext
     ) {
+        // 初始化消息存储
+        this._messageStorage = new MessageStorage(extensionContext.globalState);
         // 监听状态管理器的变化
         this._stateManager.onConnectionChange((state) => {
             this._onStateChange.fire(state);
@@ -96,7 +112,7 @@ export class AgentClient {
      * 获取服务器 URL（WebSocket）
      */
     private getServerUrl(): string {
-        const config = vscode.workspace.getConfiguration('aiAgentTools');
+        const config = vscode.workspace.getConfiguration('aiat');
         let url = config.get<string>('agentServer.url', 'ws://agent-flow.dev.csst.lab.zverse.space:32080');
         // 确保是 ws:// 协议
         if (url.startsWith('http://')) {
@@ -110,20 +126,96 @@ export class AgentClient {
     }
 
     /**
+     * 检查codebase目录是否有效
+     */
+    private async validateCodebase(codebase: string): Promise<boolean> {
+        if (!codebase) {
+            return false;
+        }
+
+        try {
+            // 检查目录是否存在
+            const fs = require('fs').promises;
+            try {
+                const stat = await fs.stat(codebase);
+                if (!stat.isDirectory()) {
+                    console.log(`[AgentClient] Codebase path exists but is not a directory: ${codebase}`);
+                    return false;
+                }
+            } catch (error) {
+                console.log(`[AgentClient] Codebase directory does not exist: ${codebase}`);
+                return false;
+            }
+
+            // 检查目录是否可读
+            try {
+                await fs.access(codebase, fs.constants.R_OK);
+            } catch (error) {
+                console.log(`[AgentClient] Codebase directory is not readable: ${codebase}`);
+                return false;
+            }
+
+            // 可选：检查是否包含基本的项目文件（如package.json、.git等）
+            const hasProjectFiles = await this.checkProjectFiles(codebase);
+            if (!hasProjectFiles) {
+                console.log(`[AgentClient] Warning: Codebase directory may not be a valid project: ${codebase}`);
+            }
+
+            return true;
+        } catch (error) {
+            console.error(`[AgentClient] Error validating codebase: ${error}`);
+            return false;
+        }
+    }
+
+    /**
+     * 检查目录是否包含项目文件
+     */
+    private async checkProjectFiles(codebase: string): Promise<boolean> {
+        const fs = require('fs').promises;
+
+        const projectFiles = [
+            'package.json',
+            '.git',
+            'README.md',
+            'README',
+            'Cargo.toml',
+            'pyproject.toml',
+            'requirements.txt',
+            'setup.py',
+            'pom.xml',
+            'build.gradle',
+            'Makefile',
+            'CMakeLists.txt'
+        ];
+
+        try {
+            const files = await fs.readdir(codebase);
+            return projectFiles.some(file => files.includes(file));
+        } catch (error) {
+            console.log(`[AgentClient] Error checking project files: ${error}`);
+            return false;
+        }
+    }
+
+    /**
      * 获取 team_config
      */
-    private getTeamConfig(agentId?: number): object {
-        const config = vscode.workspace.getConfiguration('aiAgentTools');
+    private getTeamConfig(agentId: number): object {
+        const config = vscode.workspace.getConfiguration('aiat');
         const port = config.get<number>('serverPort', 9527);
-        const teamId = agentId !== undefined ? agentId : config.get<number>('teamConfig.id', 1);
-        const codebase = config.get<string>('teamConfig.codebase', '') || this.getDefaultCodebase();
+        const teamId = agentId; // agentId is now required, no fallback to config
+
+        // 始终使用workspace根目录作为codebase
+        const codebase = this.getDefaultCodebase();
+
         const authToken = config.get<string>('authToken', '');
 
         const teamConfig: Record<string, unknown> = {
             id: teamId,
             codebase: codebase,
-            flow_id: 'flow1',
-            node_id: ['node1'],
+            flow_id: null,
+            node_id: [],
             mcp_server: this.getLocalIP(),
             mcp_port: port
         };
@@ -132,40 +224,15 @@ export class AgentClient {
             teamConfig.mcp_token = authToken;
         }
 
-        // 为不同的智能体添加特定的配置
-        // teamConfig.flow_id 与 teamConfig.node_id 非必选项
-        // 填写的内容 也是节点 ID，仅作为示例
-        // 默认为空
-        // switch (teamId) {
-        //     case 2: // 代码库理解智能体
-        //         teamConfig.flow_id = 'code_analysis';
-        //         teamConfig.node_id = ['analysis_agent', 'summary_agent'];
-        //         break;
-        //     case 3: // 开发文档生成智能体
-        //         teamConfig.flow_id = 'documentation';
-        //         teamConfig.node_id = ['doc_generator', 'doc_formatter'];
-        //         break;
-        //     case 4: // 环境构建智能体
-        //         teamConfig.flow_id = 'environment_setup';
-        //         teamConfig.node_id = ['env_builder', 'dependency_manager'];
-        //         break;
-        //     case 5: // 代码翻译智能体
-        //         teamConfig.flow_id = 'code_translation';
-        //         teamConfig.node_id = ['translator_agent', 'quality_checker'];
-        //         break;
-        //     default:
-        //         // 使用默认配置
-        //         teamConfig.flow_id = 'general_task';
-        //         teamConfig.node_id = ['general_agent'];
-        //         break;
-        // }
-
         return teamConfig;
     }
 
     private getDefaultCodebase(): string {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        return workspaceFolder?.uri.fsPath || '';
+        const codebase = workspaceFolder?.uri.fsPath || '';
+        console.log('[AgentClient] getDefaultCodebase - workspaceFolder:', workspaceFolder);
+        console.log('[AgentClient] getDefaultCodebase - extracted path:', codebase);
+        return codebase;
     }
 
     private getLocalIP(): string {
@@ -250,7 +317,7 @@ export class AgentClient {
                 serverUrl = this.getServerUrl();
 
                 // 获取认证令牌，作为 URL 参数传递
-                const config = vscode.workspace.getConfiguration('aiAgentTools');
+                const config = vscode.workspace.getConfiguration('aiat');
                 const authToken = config.get<string>('authToken', '');
 
                 // 构建 WebSocket URL: ws://host:port/ws/runs/{run_id}?token={token}
@@ -332,7 +399,7 @@ export class AgentClient {
                 // 连接成功后自动启动 MCP 服务器
                 if (autoStartMcpServer) {
                     this.log('连接成功，准备启动 MCP 服务器');
-                    vscode.commands.executeCommand('aiAgentTools.startServer');
+                    vscode.commands.executeCommand('aiat.startServer');
                 }
 
                 resolve();
@@ -429,6 +496,12 @@ export class AgentClient {
                 direction: 'outgoing'
             };
             this._messages.push(agentMessage);
+
+            // 异步保存到持久化存储
+            this._messageStorage.saveMessage(this.currentRunId, agentMessage).catch(error => {
+                console.error('[AgentClient] Failed to save outgoing message:', error);
+            });
+
             this._onMessage.fire(agentMessage);
 
             this.log(`发送消息: ${message}`);
@@ -509,7 +582,43 @@ export class AgentClient {
         this._stateManager.updateTaskState('starting');
 
         try {
+            // 获取codebase并进行有效性检查
+            const codebase = this.getDefaultCodebase();
+            if (!codebase) {
+                const error = errorHandler.createError(
+                    '无法启动任务: 未找到VS Code工作区根目录',
+                    ErrorType.TASK_START_ERROR,
+                    ErrorSeverity.HIGH,
+                    false,
+                    { task }
+                );
+                errorHandler.handleError(error, { enableUserNotification: true });
+                this._stateManager.updateTaskState('idle');
+                return false;
+            }
+
+            // 检查codebase目录是否有效
+            const isValidCodebase = await this.validateCodebase(codebase);
+            if (!isValidCodebase) {
+                const error = errorHandler.createError(
+                    `无法启动任务: Codebase目录无效或不可访问\n\n目录路径: ${codebase}\n\n请确保:\n1. 目录存在且可访问\n2. 目录包含项目文件（如package.json、.git等）`,
+                    ErrorType.TASK_START_ERROR,
+                    ErrorSeverity.HIGH,
+                    false,
+                    { task, codebase }
+                );
+                errorHandler.handleError(error, { enableUserNotification: true });
+                this._stateManager.updateTaskState('idle');
+                return false;
+            }
+
+            console.log(`[AgentClient] Codebase validation passed: ${codebase}`);
+
             const teamConfig = this.getTeamConfig(agentId);
+
+            // 验证team_config中的codebase字段
+            console.log('[AgentClient] Generated team_config:', JSON.stringify(teamConfig, null, 2));
+            console.log('[AgentClient] Codebase in team_config:', (teamConfig as any).codebase);
 
             const startMessage = {
                 type: 'start',
@@ -517,6 +626,8 @@ export class AgentClient {
                 files: [],
                 team_config: teamConfig
             };
+
+            console.log('[AgentClient] Sending start message:', JSON.stringify(startMessage, null, 2));
 
             const success = await this.sendMessageWithErrorHandling(startMessage, ErrorType.TASK_START_ERROR);
             if (!success) {
@@ -636,6 +747,7 @@ export class AgentClient {
                 content = `系统状态: ${messageData.status}`;
                 break;
             case 'message':
+                console.log('[AgentClient] Processing message type, original data:', data);
                 const msgData = messageData.data as {
                     id?: string;
                     name?: string;
@@ -644,9 +756,15 @@ export class AgentClient {
                     source?: string;
                     created_at?: string;
                 };
+                console.log('[AgentClient] Extracted msgData:', msgData);
+                console.log('[AgentClient] msgData.content:', msgData.content);
+                console.log('[AgentClient] msgData.name:', msgData.name);
+
                 content = msgData.name ?
                     `[${msgData.name}] ${msgData.content || ''}` :
                     (msgData.content || JSON.stringify(data));
+
+                console.log('[AgentClient] Final content for AgentMessage:', content);
                 break;
             case 'result':
                 const resultData = messageData.data as {
@@ -673,9 +791,9 @@ export class AgentClient {
                         })
                         .join('\n\n');
                     const statusText = resultData.status === 'complete' ? '任务完成' : '任务进行中';
-                    content = `${statusText} (${resultData.status}):\n${messages}`;
+                    content = `${messages}`;
                 } else {
-                    content = `任务结果 (${messageData.status}): ${JSON.stringify(data)}`;
+                    content = `(${messageData.status}): ${JSON.stringify(data)}`;
                 }
                 break;
             case 'input_request':
@@ -685,19 +803,58 @@ export class AgentClient {
             case 'error':
                 content = `错误: ${messageData.error}`;
                 break;
+            case 'stop':
+                // 停止消息，显示用户取消操作
+                const stopData = messageData as any;
+                content = stopData.reason || '用户请求停止任务';
+                break;
+            case 'completion':
+                // 任务完成消息，根据状态决定内容
+                const completionData = messageData.data as { status?: string; stop_reason?: string };
+                if (completionData.status === 'cancelled') {
+                    content = '任务已取消';
+                } else if (completionData.status === 'complete') {
+                    content = '任务已完成';
+                } else {
+                    content = `任务完成 (${completionData.status}): ${completionData.stop_reason || ''}`;
+                }
+                break;
             default:
                 content = JSON.stringify(data, null, 2);
+        }
+
+        // 设置消息方向：stop消息是用户发送的，其他是服务器发送的
+        const messageDirection = (messageType === 'stop') ? 'outgoing' : 'incoming';
+
+        // 提取智能体source信息
+        let source: string | undefined;
+        if (messageType === 'message') {
+            const msgData = messageData.data as { source?: string };
+            source = msgData.source;
+        } else if (messageType === 'start') {
+            // start消息也可能包含team信息
+            const teamConfig = (messageData as any).team_config;
+            if (teamConfig && teamConfig.id) {
+                source = `team_${teamConfig.id}`;
+            }
         }
 
         const message: AgentMessage = {
             type: messageType,
             content: content,
             data: data,
+            source: source,
             timestamp: Date.now(),
-            direction: 'incoming'
+            direction: messageDirection
         };
 
         this._messages.push(message);
+
+        // 异步保存到持久化存储
+        this._messageStorage.saveMessage(this.currentRunId, message).catch(error => {
+            console.error('[AgentClient] Failed to save incoming message:', error);
+        });
+
         this._onMessage.fire(message);
 
         this.log(`收到消息: ${JSON.stringify(data)}`);
@@ -840,6 +997,50 @@ export class AgentClient {
      */
     clearMessages(): void {
         this._messages = [];
+    }
+
+    /**
+     * 加载指定run的历史消息
+     */
+    async loadHistoryForRun(runId: string): Promise<void> {
+        if (!runId) {
+            return;
+        }
+
+        try {
+            console.log(`[AgentClient] Loading history for run ${runId}`);
+            const historyMessages = await this._messageStorage.getMessagesForRun(runId);
+
+            // 清空当前内存中的消息
+            this._messages = [];
+
+            // 加载历史消息到内存
+            this._messages.push(...historyMessages);
+
+            console.log(`[AgentClient] Loaded ${historyMessages.length} messages for run ${runId}`);
+
+            // 触发历史加载完成事件，而不是逐个触发消息事件
+            this._onHistoryLoaded.fire({
+                runId,
+                messages: historyMessages
+            });
+        } catch (error) {
+            console.error(`[AgentClient] Failed to load history for run ${runId}:`, error);
+        }
+    }
+
+    /**
+     * 获取消息存储实例
+     */
+    get messageStorage(): MessageStorage {
+        return this._messageStorage;
+    }
+
+    /**
+     * 设置当前run的标题
+     */
+    async setRunTitle(title: string): Promise<void> {
+        await this._messageStorage.setRunTitle(this.currentRunId, title);
     }
 
     /**

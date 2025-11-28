@@ -1,6 +1,6 @@
-# AI Agent Tools
+# AIAT (AI Assistant Toolkit)
 
-为后端 AI 智能体提供工具和代码库管理的 VS Code 扩展，支持 **MCP (Model Context Protocol)** 协议。
+AI智能体开发工具包 - 为AI智能体提供完整的开发环境，支持 **MCP (Model Context Protocol)** 协议、代码分析、文件操作和智能体通信功能。
 
 ## 功能特性
 
@@ -45,7 +45,7 @@
 
 1. 打开项目目录 `/home/wnk/code/ext`
 2. 按 `F5` 启动扩展调试
-3. 在新窗口的侧边栏会显示 **AI Agent Tools** 图标（机器人图标）
+3. 在新窗口的侧边栏会显示 **AIAT** 图标（机器人图标）
 
 ### 2. 配置服务器
 
@@ -64,7 +64,7 @@
 ### 3. 启动 MCP 服务器
 
 - 点击侧边栏 **服务状态** 面板的 ▶️ 按钮
-- 或运行命令 `AI Agent Tools: 启动工具服务器`
+- 或运行命令 `AIAT: 启动工具服务器`
 
 ### 4. 连接智能体服务
 
@@ -196,33 +196,33 @@ curl -X POST http://localhost:9527/mcp \
 
 ## 配置选项
 
-在 VS Code 设置中配置（`Ctrl+,` 搜索 `aiAgentTools`）：
+在 VS Code 设置中配置（`Ctrl+,` 搜索 `aiat`）：
 
 | 设置项 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `aiAgentTools.serverPort` | number | 9527 | MCP 服务器端口 |
-| `aiAgentTools.teamConfig.id` | number | 1 | 团队配置 ID |
-| `aiAgentTools.teamConfig.codebase` | string | "" | 代码库路径 |
-| `aiAgentTools.autoStart` | boolean | false | 自动启动 MCP 服务器 |
-| `aiAgentTools.authToken` | string | "" | 认证令牌 |
-| `aiAgentTools.agentServer.url` | string | http://agent-flow... | 后端智能体服务地址 |
-| `aiAgentTools.agentServer.autoConnect` | boolean | false | 自动连接智能体服务 |
-| `aiAgentTools.enableFileOperations` | boolean | true | 启用文件操作 |
-| `aiAgentTools.enableCodeSearch` | boolean | true | 启用代码搜索 |
-| `aiAgentTools.enableTerminal` | boolean | true | 启用终端操作 |
+| `aiat.serverPort` | number | 9527 | MCP 服务器端口 |
+| `aiat.teamConfig.id` | number | 1 | 团队配置 ID |
+| `aiat.teamConfig.codebase` | string | "" | 代码库路径 |
+| `aiat.autoStart` | boolean | false | 自动启动 MCP 服务器 |
+| `aiat.authToken` | string | "" | 认证令牌 |
+| `aiat.agentServer.url` | string | http://agent-flow... | 后端智能体服务地址 |
+| `aiat.agentServer.autoConnect` | boolean | false | 自动连接智能体服务 |
+| `aiat.enableFileOperations` | boolean | true | 启用文件操作 |
+| `aiat.enableCodeSearch` | boolean | true | 启用代码搜索 |
+| `aiat.enableTerminal` | boolean | true | 启用终端操作 |
 
 ## 可用命令
 
 | 命令 | 说明 |
 |------|------|
-| `AI Agent Tools: 启动工具服务器` | 启动 MCP 服务器 |
-| `AI Agent Tools: 停止工具服务器` | 停止 MCP 服务器 |
-| `AI Agent Tools: 显示服务状态` | 显示当前状态 |
-| `AI Agent Tools: 打开配置` | 打开设置页面 |
-| `AI Agent Tools: 复制服务器配置信息` | 复制 team_config 到剪贴板 |
-| `AI Agent Tools: 连接智能体服务` | 连接后端 WebSocket |
-| `AI Agent Tools: 断开智能体服务` | 断开 WebSocket 连接 |
-| `AI Agent Tools: 打开消息面板` | 打开智能体消息视图 |
+| `AIAT: 启动工具服务器` | 启动 MCP 服务器 |
+| `AIAT: 停止工具服务器` | 停止 MCP 服务器 |
+| `AIAT: 显示服务状态` | 显示当前状态 |
+| `AIAT: 打开配置` | 打开设置页面 |
+| `AIAT: 复制服务器配置信息` | 复制 team_config 到剪贴板 |
+| `AIAT: 连接智能体服务` | 连接后端 WebSocket |
+| `AIAT: 断开智能体服务` | 断开 WebSocket 连接 |
+| `AIAT: 打开消息面板` | 打开智能体消息视图 |
 
 ## 调试步骤
 

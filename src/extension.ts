@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ToolRegistry } from './tools';
 import { McpServer } from './server';
-import { StatusViewProvider, ToolsViewProvider, ConfigViewProvider, ChatViewProvider, copyServerInfo, openSettings } from './views';
+import { StatusViewProvider, ToolsViewProvider, ConfigViewProvider, ChatViewProvider, HistoryViewProvider, copyServerInfo, openSettings } from './views';
 import { AgentClient } from './client';
 
 let mcpServer: McpServer | null = null;
@@ -11,16 +11,17 @@ let outputChannel: vscode.OutputChannel | null = null;
 let statusViewProvider: StatusViewProvider | null = null;
 let toolsViewProvider: ToolsViewProvider | null = null;
 let configViewProvider: ConfigViewProvider | null = null;
+let historyViewProvider: HistoryViewProvider | null = null;
 let chatViewProvider: ChatViewProvider | null = null;
 
 /**
  * 扩展激活入口
  */
 export function activate(context: vscode.ExtensionContext) {
-    console.log('AI Agent Tools 扩展已激活');
+    console.log('AIAT 扩展已激活');
 
     // 创建输出通道
-    outputChannel = vscode.window.createOutputChannel('AI Agent Tools');
+    outputChannel = vscode.window.createOutputChannel('AIAT');
     
     // 创建工具注册表
     toolRegistry = new ToolRegistry();
@@ -29,18 +30,20 @@ export function activate(context: vscode.ExtensionContext) {
     mcpServer = new McpServer(toolRegistry, outputChannel);
 
     // 创建 WebSocket 客户端
-    agentClient = new AgentClient(outputChannel);
+    agentClient = new AgentClient(outputChannel, context);
 
     // 创建视图提供器
     statusViewProvider = new StatusViewProvider();
     toolsViewProvider = new ToolsViewProvider();
     configViewProvider = new ConfigViewProvider();
-    chatViewProvider = new ChatViewProvider(context.extensionUri, agentClient);
+    historyViewProvider = new HistoryViewProvider(context.extensionUri, agentClient);
+    chatViewProvider = new ChatViewProvider(context.extensionUri, agentClient, context);
 
     // 注册视图
-    vscode.window.registerTreeDataProvider('aiAgentTools.status', statusViewProvider);
-    vscode.window.registerTreeDataProvider('aiAgentTools.tools', toolsViewProvider);
-    vscode.window.registerTreeDataProvider('aiAgentTools.config', configViewProvider);
+    vscode.window.registerTreeDataProvider('aiat.status', statusViewProvider);
+    vscode.window.registerTreeDataProvider('aiat.tools', toolsViewProvider);
+    vscode.window.registerTreeDataProvider('aiat.config', configViewProvider);
+    vscode.window.registerTreeDataProvider('aiat.history', historyViewProvider);
     
     // 注册 Webview 视图
     context.subscriptions.push(
@@ -51,7 +54,7 @@ export function activate(context: vscode.ExtensionContext) {
     toolsViewProvider.updateTools(toolRegistry.getToolDefinitions());
 
     // 注册命令：启动服务器
-    const startServerCmd = vscode.commands.registerCommand('aiAgentTools.startServer', async () => {
+    const startServerCmd = vscode.commands.registerCommand('aiat.startServer', async () => {
         try {
             await mcpServer?.start();
             // 无论启动成功还是发现已在运行，都要更新状态视图
@@ -75,7 +78,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // 注册命令：停止服务器
-    const stopServerCmd = vscode.commands.registerCommand('aiAgentTools.stopServer', async () => {
+    const stopServerCmd = vscode.commands.registerCommand('aiat.stopServer', async () => {
         try {
             await mcpServer?.stop();
             updateStatusView();
@@ -86,7 +89,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // 注册命令：显示状态
-    const showStatusCmd = vscode.commands.registerCommand('aiAgentTools.showStatus', () => {
+    const showStatusCmd = vscode.commands.registerCommand('aiat.showStatus', () => {
         const status = mcpServer?.getStatus();
         if (status) {
             const statusText = [
@@ -102,19 +105,19 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // 注册命令：打开设置
-    const openSettingsCmd = vscode.commands.registerCommand('aiAgentTools.openSettings', () => {
+    const openSettingsCmd = vscode.commands.registerCommand('aiat.openSettings', () => {
         openSettings();
     });
 
     // 注册命令：复制服务器配置信息
-    const copyServerInfoCmd = vscode.commands.registerCommand('aiAgentTools.copyServerInfo', () => {
+    const copyServerInfoCmd = vscode.commands.registerCommand('aiat.copyServerInfo', () => {
         if (configViewProvider) {
             copyServerInfo(configViewProvider);
         }
     });
 
     // 注册命令：连接智能体服务
-    const connectAgentCmd = vscode.commands.registerCommand('aiAgentTools.connectAgent', async () => {
+    const connectAgentCmd = vscode.commands.registerCommand('aiat.connectAgent', async () => {
         try {
             if (agentClient) {
                 await agentClient.connect(true); // 自动启动 MCP 服务器
@@ -155,7 +158,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // 注册命令：断开智能体服务
-    const disconnectAgentCmd = vscode.commands.registerCommand('aiAgentTools.disconnectAgent', () => {
+    const disconnectAgentCmd = vscode.commands.registerCommand('aiat.disconnectAgent', () => {
         if (agentClient) {
             agentClient.disconnect();
 
@@ -184,12 +187,59 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // 注册命令：打开聊天面板
-    const openChatCmd = vscode.commands.registerCommand('aiAgentTools.openChat', () => {
-        vscode.commands.executeCommand('aiAgentTools.chat.focus');
+    const openChatCmd = vscode.commands.registerCommand('aiat.openChat', () => {
+        vscode.commands.executeCommand('aiat.chat.focus');
+    });
+
+    // 注册历史消息相关命令
+    const switchToRunCmd = vscode.commands.registerCommand('aiat.switchToRun', async (runId: string) => {
+        if (agentClient && runId) {
+            try {
+                // 切换到指定的run
+                await agentClient.loadHistoryForRun(runId);
+
+                // 刷新历史视图
+                if (historyViewProvider) {
+                    await historyViewProvider.refresh();
+                }
+
+                // 切换到聊天视图
+                vscode.commands.executeCommand('aiat.chat.focus');
+
+                vscode.window.showInformationMessage(`已切换到 Run: ${runId}`);
+            } catch (error) {
+                vscode.window.showErrorMessage(`切换到 Run ${runId} 失败: ${error}`);
+            }
+        }
+    });
+
+    const refreshHistoryCmd = vscode.commands.registerCommand('aiat.refreshHistory', async () => {
+        if (historyViewProvider) {
+            await historyViewProvider.refresh();
+            vscode.window.showInformationMessage('历史消息已刷新');
+        }
+    });
+
+    const clearHistoryCmd = vscode.commands.registerCommand('aiat.clearHistory', async () => {
+        if (historyViewProvider) {
+            await historyViewProvider.clearAllHistory();
+        }
+    });
+
+    const deleteHistoryCmd = vscode.commands.registerCommand('aiat.deleteHistory', async (historyItem: any) => {
+        if (historyViewProvider && historyItem && historyItem.runId) {
+            await historyViewProvider.deleteHistory(historyItem.runId);
+        }
+    });
+
+    const showStorageStatsCmd = vscode.commands.registerCommand('aiat.showStorageStats', async () => {
+        if (historyViewProvider) {
+            await historyViewProvider.showStorageStats();
+        }
     });
 
     // 注册命令：调试状态信息
-    const debugStateCmd = vscode.commands.registerCommand('aiAgentTools.debugState', () => {
+    const debugStateCmd = vscode.commands.registerCommand('aiat.debugState', () => {
         if (agentClient) {
             const stateSummary = agentClient.stateManager.getStateSummary();
             console.log('=== Agent Client State Debug ===');
@@ -221,7 +271,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 监听配置变化
     const configChangeListener = vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('aiAgentTools')) {
+        if (e.affectsConfiguration('aiat')) {
             configViewProvider?.refresh();
             updateStatusView();
         }
@@ -237,6 +287,11 @@ export function activate(context: vscode.ExtensionContext) {
         connectAgentCmd,
         disconnectAgentCmd,
         openChatCmd,
+        switchToRunCmd,
+        refreshHistoryCmd,
+        clearHistoryCmd,
+        deleteHistoryCmd,
+        showStorageStatsCmd,
         debugStateCmd,
         configChangeListener,
         outputChannel
@@ -246,7 +301,7 @@ export function activate(context: vscode.ExtensionContext) {
     updateStatusView();
 
     // 自动启动服务器（可选）
-    const autoStart = vscode.workspace.getConfiguration('aiAgentTools').get('autoStart', false);
+    const autoStart = vscode.workspace.getConfiguration('aiat').get('autoStart', false);
     if (autoStart) {
         mcpServer.start().catch(err => {
             outputChannel?.appendLine(`自动启动失败: ${err.message}`);
@@ -254,7 +309,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // 自动连接智能体服务（增强用户体验）
-    const autoConnect = vscode.workspace.getConfiguration('aiAgentTools').get('agentServer.autoConnect', false);
+    const autoConnect = vscode.workspace.getConfiguration('aiat').get('agentServer.autoConnect', false);
     if (autoConnect) {
         // 延迟1秒后自动连接，确保扩展完全初始化
         setTimeout(async () => {
@@ -269,7 +324,7 @@ export function activate(context: vscode.ExtensionContext) {
         }, 1000);
     }
 
-    outputChannel.appendLine('AI Agent Tools 扩展已就绪');
+    outputChannel.appendLine('AIAT 扩展已就绪');
     outputChannel.appendLine(`协议: MCP (Model Context Protocol)`);
     outputChannel.appendLine(`可用工具: ${toolRegistry.getToolNames().join(', ')}`);
 }
@@ -300,7 +355,7 @@ function updateStatusView(): void {
  * 扩展停用
  */
 export async function deactivate(): Promise<void> {
-    console.log('AI Agent Tools 扩展正在停用...');
+    console.log('AIAT 扩展正在停用...');
 
     try {
         // 断开智能体连接
@@ -333,7 +388,7 @@ export async function deactivate(): Promise<void> {
             outputChannel = null;
         }
 
-        console.log('AI Agent Tools 扩展已停用');
+        console.log('AIAT 扩展已停用');
     } catch (error) {
         console.warn('Error during extension deactivation:', error);
     }

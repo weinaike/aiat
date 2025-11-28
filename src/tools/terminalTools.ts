@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { BaseTool } from './baseTool';
 import { ToolDefinition } from '../types';
+import * as cp from 'child_process';
+import * as util from 'util';
 
 /**
  * 运行命令工具
@@ -8,7 +10,7 @@ import { ToolDefinition } from '../types';
 export class RunCommandTool extends BaseTool {
     definition: ToolDefinition = {
         name: 'run_command',
-        description: '在终端中运行命令',
+        description: '在终端中运行命令，自动获取命令输出结果。对于简单的命令（如ls, cat, grep等）将直接返回输出；对于交互式命令（如vim, python等）将在VS Code终端中执行',
         inputSchema: {
             type: 'object',
             properties: {
@@ -24,6 +26,11 @@ export class RunCommandTool extends BaseTool {
                     type: 'string',
                     description: '终端名称（可选）',
                     default: 'AI Agent'
+                },
+                use_terminal: {
+                    type: 'boolean',
+                    description: '强制在VS Code终端中执行命令（可选，默认false。设为true时将在终端中执行，不会直接返回输出）',
+                    default: false
                 }
             },
             required: ['command']
@@ -32,11 +39,36 @@ export class RunCommandTool extends BaseTool {
 
     async execute(params: Record<string, unknown>): Promise<unknown> {
         this.validateParams(params);
-        
-        const command = params.command as string;
-        const cwd = params.cwd as string || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        const name = params.name as string || 'AI Agent';
 
+        const command = params.command as string;
+        let cwd = params.cwd as string;
+        if (!cwd) {
+            cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd();
+        }
+        const name = params.name as string || 'AI Agent';
+        const useTerminal = params.use_terminal as boolean ?? false;
+
+        // 如果用户明确要求使用终端，或者命令是交互式的，则使用终端模式
+        if (useTerminal || this.isInteractiveCommand(command)) {
+            return this.executeInTerminal(command, cwd, name);
+        }
+
+        // 否则使用child_process直接执行并获取输出
+        return this.executeWithOutput(command, cwd);
+    }
+
+    private isInteractiveCommand(command: string): boolean {
+        const interactiveCommands = [
+            'vim', 'nano', 'emacs', 'code', 'vi', 'top', 'htop',
+            'ssh', 'ftp', 'sftp', 'telnet', 'python', 'node',
+            'bash', 'zsh', 'fish', 'less', 'more', 'man'
+        ];
+
+        const firstWord = command.trim().split(/\s+/)[0];
+        return interactiveCommands.includes(firstWord) || command.includes('&&') || command.includes('||');
+    }
+
+    private async executeInTerminal(command: string, cwd: string, name: string): Promise<unknown> {
         // 创建或获取终端
         let terminal = vscode.window.terminals.find(t => t.name === name);
         if (!terminal) {
@@ -52,8 +84,47 @@ export class RunCommandTool extends BaseTool {
         return {
             success: true,
             message: `命令已发送到终端: ${command}`,
-            terminalName: name
+            terminalName: name,
+            mode: 'terminal',
+            note: '交互式命令已在终端中执行，请查看终端输出'
         };
+    }
+
+    private async executeWithOutput(command: string, cwd: string): Promise<unknown> {
+        try {
+            // 使用exec执行命令并获取输出
+            const exec = util.promisify(cp.exec);
+
+            const { stdout, stderr } = await exec(command, {
+                cwd: cwd,
+                encoding: 'utf8',
+                maxBuffer: 1024 * 1024 * 10, // 10MB buffer
+                timeout: 30000 // 30 seconds timeout
+            });
+
+            const hasOutput = stdout && stdout.trim().length > 0;
+            const hasError = stderr && stderr.trim().length > 0;
+
+            return {
+                success: true,
+                command: command,
+                workingDirectory: cwd,
+                output: hasOutput ? stdout : null,
+                error: hasError ? stderr : null,
+                exitCode: 0,
+                mode: 'direct'
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                command: command,
+                workingDirectory: cwd,
+                output: error.stdout || null,
+                error: error.stderr || error.message,
+                exitCode: error.code || 1,
+                mode: 'direct'
+            };
+        }
     }
 }
 

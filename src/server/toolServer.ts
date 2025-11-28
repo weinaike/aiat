@@ -31,7 +31,7 @@ export class ToolServer {
     constructor(toolRegistry: ToolRegistry, outputChannel: vscode.OutputChannel) {
         this.toolRegistry = toolRegistry;
         this.outputChannel = outputChannel;
-        this.port = vscode.workspace.getConfiguration('aiAgentTools').get('serverPort', 9527);
+        this.port = vscode.workspace.getConfiguration('aiat').get('serverPort', 9527);
     }
 
     /**
@@ -49,7 +49,7 @@ export class ToolServer {
             this.log(message);
             vscode.window.showWarningMessage(message, '检查服务器状态').then(selection => {
                 if (selection === '检查服务器状态') {
-                    vscode.commands.executeCommand('aiAgentTools.showStatus');
+                    vscode.commands.executeCommand('aiat.showStatus');
                 }
             });
             throw new Error(`端口 ${this.port} 已被占用`);
@@ -63,7 +63,7 @@ export class ToolServer {
 
                 this.server.listen(this.port, () => {
                     this.log(`工具服务器已启动，监听端口: ${this.port}`);
-                    vscode.window.showInformationMessage(`AI Agent Tools 服务器已启动，端口: ${this.port}`);
+                    vscode.window.showInformationMessage(`AIAT 服务器已启动，端口: ${this.port}`);
                     resolve();
                 });
 
@@ -77,7 +77,7 @@ export class ToolServer {
                             if (selection === '停止占用端口的进程') {
                                 vscode.env.openExternal(vscode.Uri.parse(`https://stackoverflow.com/questions/53491587/how-to-kill-process-running-on-port-in-windows-macos-or-linux`));
                             } else if (selection === '更改端口') {
-                                vscode.commands.executeCommand('aiAgentTools.openSettings');
+                                vscode.commands.executeCommand('aiat.openSettings');
                             }
                         });
                     }
@@ -212,7 +212,7 @@ export class ToolServer {
             this.server!.close(() => {
                 this.server = null;
                 this.log('服务器已停止');
-                vscode.window.showInformationMessage('AI Agent Tools 服务器已停止');
+                vscode.window.showInformationMessage('AIAT 服务器已停止');
                 resolve();
             });
         });

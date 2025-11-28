@@ -1,3 +1,5 @@
+import * as vscode from 'vscode';
+
 /**
  * 错误类型枚举
  */
@@ -320,22 +322,39 @@ export class ErrorHandler {
     private notifyUser(error: ExtendedError): void {
         // 根据严重程度和类型决定通知方式
         const notificationMessage = this.formatUserMessage(error);
+        const suggestions = this.getErrorSuggestions(error);
 
+        // 同时显示控制台消息和VS Code通知
         switch (error.severity) {
             case ErrorSeverity.LOW:
                 // 低严重性错误使用信息提示
                 console.info(notificationMessage);
+                if (suggestions.length > 0) {
+                    vscode.window.showInformationMessage(notificationMessage, ...suggestions);
+                } else {
+                    vscode.window.showInformationMessage(notificationMessage);
+                }
                 break;
 
             case ErrorSeverity.MEDIUM:
                 // 中等严重性错误使用警告提示
                 console.warn(notificationMessage);
+                if (suggestions.length > 0) {
+                    vscode.window.showWarningMessage(notificationMessage, ...suggestions);
+                } else {
+                    vscode.window.showWarningMessage(notificationMessage);
+                }
                 break;
 
             case ErrorSeverity.HIGH:
             case ErrorSeverity.CRITICAL:
                 // 高严重性错误使用错误提示
                 console.error(notificationMessage);
+                if (suggestions.length > 0) {
+                    vscode.window.showErrorMessage(notificationMessage, ...suggestions);
+                } else {
+                    vscode.window.showErrorMessage(notificationMessage);
+                }
                 break;
         }
     }

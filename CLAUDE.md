@@ -128,12 +128,20 @@ src/
 
 ### Configuration System
 
-The extension uses VS Code settings under `aiAgentTools.*` namespace:
+The extension uses VS Code settings under `aiat.*` namespace:
 
 - **Server**: port 9527, auto-start option
-- **Team Config**: ID, codebase path (required for backend integration)
+- **Agent Selection**: Team ID is now selected via the chat interface dropdown (智能体选择器)
+- **Codebase**: Automatically uses VS Code workspace root directory with validation
 - **Agent Server**: WebSocket URL and auto-connect settings
 - **Feature Flags**: Enable/disable file operations, code search, terminal tools
+
+### Smart Configuration Features
+
+- **Auto Codebase Detection**: Automatically detects and uses the current VS Code workspace root directory
+- **Directory Validation**: Validates codebase directory exists, is readable, and contains project files
+- **Agent Selection**: Team ID is determined by the selected agent in the chat interface dropdown
+- **Error Prevention**: Blocks task start if codebase directory is invalid or inaccessible
 
 ## Development Notes
 
@@ -225,20 +233,7 @@ Messages that clients can send to the server:
 Description: Start task execution
 
 ```json
-{
-  "type": "start",
-  "task": "What is the weather today?",
-  "files": [],
-  "team_config": {
-    "id": 2,
-    "codebase": "/root/project/xxx/",
-    "flow_id": "flow1",
-    "node_id": ["node1", "node2"],
-    "mcp_port": 8080,
-    "mcp_server": "127.0.0.1",
-    "mcp_token": "your_token"
-  }
-}
+{ "type": "start", "task": "What is the weather today?", "files": [], "team_config": { "id": 2, "codebase": "/root/project/xxx/", "flow_id":"flow1", "node_id": ["node1", "node2"], "mcp_port": 8080, "mcp_server": "127.0.0.1", "mcp_token": "your_token" } }
 ```
 
 #### Stop Task
@@ -246,10 +241,7 @@ Description: Start task execution
 Description: Stop task execution
 
 ```json
-{
-  "type": "stop",
-  "reason": "User cancelled"
-}
+{ "type": "stop", "reason": "User cancelled" }
 ```
 
 #### Ping
@@ -267,10 +259,7 @@ Description: Ping server for connection check
 Description: Respond to input request from agent
 
 ```json
-{
-  "type": "input_response",
-  "response": "Yes, continue with the task"
-}
+{ "type": "input_response", "response": "Yes, continue with the task" }
 ```
 
 ### Server to Client Messages
@@ -282,11 +271,7 @@ Messages that the server sends to clients:
 Description: System status messages
 
 ```json
-{
-  "type": "system",
-  "status": "connected",
-  "timestamp": "2024-01-01T12:00:00Z"
-}
+{ "type": "system", "status": "connected", "timestamp": "2024-01-01T12:00:00Z" }
 ```
 
 #### Agent Message
@@ -312,60 +297,30 @@ Description: Agent messages during execution
 Description: Final task result
 
 ```json
-{
-  "type": "result",
-  "status": "partial",
-  "data": {
-    "task_result": {
-      "messages": [
-        {
-          "id": "673349a2-ca2b-4da0-8fe7-a07518eda6e1",
-          "source": "flow1.node1.summary_agent",
-          "models_usage": {
-            "prompt_tokens": 5428,
-            "completion_tokens": 1049
-          },
-          "metadata": {},
-          "created_at": "2025-07-23T01:52:20.279239+00:00",
-          "content": "# Codon项目业务分析文档\n\n## 项目总体介绍\n\n......",
-          "type": "TextMessage",
-          "name": "功能分析"
-        }
-      ],
-      "stop_reason": "node completed"
-    },
-    "usage": "flow1.node1.summary_agent",
-    "duration": 27.859392881393433
-  }
-}
+{ "type": "result", "status": "partial", "data": { "task_result": { "messages": [ { "id": "673349a2-ca2b-4da0-8fe7-a07518eda6e1", "source": "flow1.node1.summary_agent", "models_usage": { "prompt_tokens": 5428, "completion_tokens": 1049 }, "metadata": {}, "created_at": "2025-07-23T01:52:20.279239+00:00", "content": "# Codon项目业务分析文档\n\n## 项目总体介绍\n\n......", "type": "TextMessage", "name": "功能分析" } ], "stop_reason": "node completed" }, "usage": "flow1.node1.summary_agent", "duration": 27.859392881393433 } }
 ```
 
 ```json
-{
-  "type": "result",
-  "status": "complete",
-  "data": {
-    "task_result": {
-      "messages": [
-        {
-          "id": "558e96b2-b8c2-4efa-b7ec-a26be2d6c8a7",
-          "source": "solution",
-          "name": "solution",
-          "content": "Solution execution completed.",
-          "type": "TextMessage"
-        }
-      ],
-      "stop_reason": "task completed"
-    },
-    "usage": "solution",
-    "duration": 28.52797770500183
-}
+{ "type": "result", "status": "complete", "data": { "task_result": { "messages": [ { "id": "558e96b2-b8c2-4efa-b7ec-a26be2d6c8a7", "source": "solution", "name": "solution", "content": "Solution execution completed.", "type": "TextMessage"} ], "stop_reason": "task completed" }, "usage": "solution", "duration": 28.52797770500183 } }
 ```
 
-#### Task Completion
+#### Input Request
 
-Description: Task completion confirmation (including cancelled tasks)
+Description: Request for user input
 
+```json
+{ "type": "input_request", "prompt": "Do you want to continue?", "data": {"source": "system", "content": "Waiting for user input"} }
+```
+
+#### Pong
+
+Description: Response to ping
+
+```json
+{ "type": "pong", "timestamp": "2024-01-01T12:00:00Z" }
+```
+
+#### 手动取消任务 返回的消息
 ```json
 {
   "type": "completion",
@@ -374,62 +329,29 @@ Description: Task completion confirmation (including cancelled tasks)
     "task_result": {
       "messages": [
         {
-          "id": "8cf1bf66-d387-43be-afe9-d657921cf665",
+          "id": "360ebe1a-85c4-4621-83d1-1880cf2cc00f",
           "source": "user",
           "models_usage": null,
           "metadata": {},
-          "created_at": "2025-11-27T03:20:30.968874+00:00"
+          "created_at": "2025-11-27T12:45:50.764136+00:00",
+          "content": "User requested stop",
+          "type": "TextMessage"
         }
       ],
       "stop_reason": "User requested stop"
     },
     "usage": "",
-    "duration": 0,
-    "timestamp": "2025-11-27T03:20:31.132184+00:00"
+    "duration": 0
+  },
+  "timestamp": "2025-11-27T12:45:50.770383+00:00"
 }
 ```
-
-**Key Points for Cancellation**:
-- `type`: "completion" - Task completion message
-- `status`: "cancelled" - User cancelled status
-- `stop_reason`: "User requested stop" - Cancellation reason
-
-#### Input Request
-
-Description: Request for user input
-
-```json
-{
-  "type": "input_request",
-  "prompt": "Do you want to continue?",
-  "data": {
-    "source": "system",
-    "content": "Waiting for user input"
-  }
-}
-```
-
-#### Pong
-
-Description: Response to ping
-
-```json
-{
-  "type": "pong",
-  "timestamp": "2024-01-01T12:00:00Z"
-}
-```
-
 #### Error
 
 Description: Error messages
 
 ```json
-{
-  "type": "error",
-  "error": "Error description",
-  "timestamp": "2024-01-01T12:00:00Z"
-}
+{ "type": "error", "error": "Error description", "timestamp": "2024-01-01T12:00:00Z" }
 ```
 
 ### Connection States

@@ -1,9 +1,9 @@
 {
-  "name": "ai-agent-tools",
-  "displayName": "AI Agent Tools",
-  "description": "为后端AI智能体提供工具和代码库管理的VS Code扩展",
-  "version": "0.0.1",
-  "publisher": "your-publisher-name",
+  "name": "aiat",
+  "displayName": "AIAT",
+  "description": "AI Assistant Toolkit - AI智能体开发工具包，提供MCP协议支持、代码分析和智能体通信功能",
+  "version": "0.0.2",
+  "publisher": "weinaike",
   "engines": {
     "vscode": "^1.106.1"
   },
@@ -25,130 +25,146 @@
   "contributes": {
     "commands": [
       {
-        "command": "aiAgentTools.startServer",
-        "title": "AI Agent Tools: 启动工具服务器",
+        "command": "aiat.startServer",
+        "title": "AIAT: 启动工具服务器",
         "icon": "$(play)"
       },
       {
-        "command": "aiAgentTools.stopServer",
-        "title": "AI Agent Tools: 停止工具服务器",
+        "command": "aiat.stopServer",
+        "title": "AIAT: 停止工具服务器",
         "icon": "$(debug-stop)"
       },
       {
-        "command": "aiAgentTools.showStatus",
-        "title": "AI Agent Tools: 显示服务状态"
+        "command": "aiat.showStatus",
+        "title": "AIAT: 显示服务状态"
       },
       {
-        "command": "aiAgentTools.openSettings",
-        "title": "AI Agent Tools: 打开配置",
+        "command": "aiat.openSettings",
+        "title": "AIAT: 打开配置",
         "icon": "$(gear)"
       },
       {
-        "command": "aiAgentTools.copyServerInfo",
-        "title": "AI Agent Tools: 复制服务器配置信息"
+        "command": "aiat.copyServerInfo",
+        "title": "AIAT: 复制服务器配置信息"
       },
       {
-        "command": "aiAgentTools.connectAgent",
-        "title": "AI Agent Tools: 连接智能体服务",
+        "command": "aiat.connectAgent",
+        "title": "AIAT: 连接智能体服务",
         "icon": "$(plug)"
       },
       {
-        "command": "aiAgentTools.disconnectAgent",
-        "title": "AI Agent Tools: 断开智能体服务",
+        "command": "aiat.disconnectAgent",
+        "title": "AIAT: 断开智能体服务",
         "icon": "$(debug-disconnect)"
       },
       {
-        "command": "aiAgentTools.openChat",
-        "title": "AI Agent Tools: 打开消息面板",
+        "command": "aiat.openChat",
+        "title": "AIAT: 打开消息面板",
         "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "aiat.switchToRun",
+        "title": "AIAT: 切换到指定Run的消息"
+      },
+      {
+        "command": "aiat.refreshHistory",
+        "title": "AIAT: 刷新历史消息",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "aiat.clearHistory",
+        "title": "AIAT: 清空历史消息",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "aiat.deleteHistory",
+        "title": "删除",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "aiat.showStorageStats",
+        "title": "AIAT: 显示历史统计",
+        "icon": "$(info)"
       }
     ],
     "configuration": {
-      "title": "AI Agent Tools",
+      "title": "AIAT",
       "properties": {
-        "aiAgentTools.serverPort": {
+        "aiat.serverPort": {
           "type": "number",
           "default": 9527,
           "description": "MCP 工具服务器监听端口",
           "order": 1
         },
-        "aiAgentTools.teamConfig.id": {
-          "type": "number",
-          "default": 1,
-          "description": "团队配置 ID（必需）",
-          "order": 2
-        },
-        "aiAgentTools.teamConfig.codebase": {
-          "type": "string",
-          "default": "",
-          "description": "代码库根路径（必需，如 /root/project/）",
-          "order": 3
-        },
-        "aiAgentTools.autoStart": {
+        "aiat.autoStart": {
           "type": "boolean",
           "default": false,
           "description": "扩展激活时自动启动服务器",
-          "order": 4
+          "order": 2
         },
-        "aiAgentTools.enableFileOperations": {
+        "aiat.enableFileOperations": {
           "type": "boolean",
           "default": true,
           "description": "启用文件操作工具"
         },
-        "aiAgentTools.enableCodeSearch": {
+        "aiat.enableCodeSearch": {
           "type": "boolean",
           "default": true,
           "description": "启用代码搜索工具"
         },
-        "aiAgentTools.enableTerminal": {
+        "aiat.enableTerminal": {
           "type": "boolean",
           "default": true,
           "description": "启用终端操作工具"
         },
-        "aiAgentTools.authToken": {
+        "aiat.authToken": {
           "type": "string",
           "default": "",
           "description": "认证令牌（可选，用于验证后端智能体请求）"
         },
-        "aiAgentTools.agentServer.url": {
+        "aiat.agentServer.url": {
           "type": "string",
           "default": "ws://agent-flow.dev.csst.lab.zverse.space:32080",
           "description": "后端智能体服务地址（WebSocket）",
-          "order": 5
+          "order": 3
         },
-        "aiAgentTools.agentServer.autoConnect": {
+        "aiat.agentServer.autoConnect": {
           "type": "boolean",
           "default": true,
           "description": "扩展激活时自动连接智能体服务",
-          "order": 6
+          "order": 4
         }
       }
     },
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "aiAgentTools",
-          "title": "AI Agent Tools",
-          "icon": "$(robot)"
+          "id": "aiat",
+          "title": "AIAT",
+          "icon": "$(code)"
         }
       ]
     },
     "views": {
-      "aiAgentTools": [
+      "aiat": [
         {
-          "id": "aiAgentTools.status",
-          "name": "服务状态"
+          "id": "aiat.status",
+          "name": "工具服务状态"
         },
         {
-          "id": "aiAgentTools.config",
+          "id": "aiat.config",
           "name": "连接配置"
         },
         {
-          "id": "aiAgentTools.tools",
+          "id": "aiat.tools",
           "name": "可用工具"
         },
         {
-          "id": "aiAgentTools.chat",
+          "id": "aiat.history",
+          "name": "历史消息"
+        },
+        {
+          "id": "aiat.chat",
           "name": "智能体消息",
           "type": "webview"
         }
@@ -157,29 +173,51 @@
     "menus": {
       "view/title": [
         {
-          "command": "aiAgentTools.startServer",
-          "when": "view == aiAgentTools.status",
+          "command": "aiat.startServer",
+          "when": "view == aiat.status",
           "group": "navigation"
         },
         {
-          "command": "aiAgentTools.stopServer",
-          "when": "view == aiAgentTools.status",
+          "command": "aiat.stopServer",
+          "when": "view == aiat.status",
           "group": "navigation"
         },
         {
-          "command": "aiAgentTools.openSettings",
-          "when": "view == aiAgentTools.config",
+          "command": "aiat.openSettings",
+          "when": "view == aiat.config",
           "group": "navigation"
         },
         {
-          "command": "aiAgentTools.connectAgent",
-          "when": "view == aiAgentTools.chat",
+          "command": "aiat.refreshHistory",
+          "when": "view == aiat.history",
           "group": "navigation"
         },
         {
-          "command": "aiAgentTools.disconnectAgent",
-          "when": "view == aiAgentTools.chat",
+          "command": "aiat.clearHistory",
+          "when": "view == aiat.history",
           "group": "navigation"
+        },
+        {
+          "command": "aiat.showStorageStats",
+          "when": "view == aiat.history",
+          "group": "navigation"
+        },
+        {
+          "command": "aiat.connectAgent",
+          "when": "view == aiat.chat",
+          "group": "navigation"
+        },
+        {
+          "command": "aiat.disconnectAgent",
+          "when": "view == aiat.chat",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "aiat.deleteHistory",
+          "when": "view == aiat.history",
+          "group": "inline"
         }
       ]
     }
