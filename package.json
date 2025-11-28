@@ -141,7 +141,7 @@
         {
           "id": "aiat",
           "title": "AIAT",
-          "icon": "$(code)"
+          "icon": "icon.svg"
         }
       ]
     },
