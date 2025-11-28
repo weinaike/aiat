@@ -1,6 +1,6 @@
 import { ToolHandler, ToolDefinition } from '../types';
 import { ReadFileTool, WriteFileTool, ListDirectoryTool, DeleteFileTool } from './fileTools';
-import { TextSearchTool, FileSearchTool, SymbolSearchTool } from './searchTools';
+import { TextSearchTool, FileSearchTool, SymbolSearchTool, GetEnvironmentTool } from './searchTools';
 import { RunCommandTool, GetDiagnosticsTool, OpenFileTool } from './terminalTools';
 
 /**
@@ -27,6 +27,7 @@ export class ToolRegistry {
         this.register(new TextSearchTool());
         this.register(new FileSearchTool());
         this.register(new SymbolSearchTool());
+        this.register(new GetEnvironmentTool());
 
         // 终端和编辑器工具
         this.register(new RunCommandTool());
@@ -83,6 +84,6 @@ export class ToolRegistry {
 
 // 导出所有工具类
 export { ReadFileTool, WriteFileTool, ListDirectoryTool, DeleteFileTool } from './fileTools';
-export { TextSearchTool, FileSearchTool, SymbolSearchTool } from './searchTools';
+export { TextSearchTool, FileSearchTool, SymbolSearchTool, GetEnvironmentTool } from './searchTools';
 export { RunCommandTool, GetDiagnosticsTool, OpenFileTool } from './terminalTools';
 export { BaseTool } from './baseTool';

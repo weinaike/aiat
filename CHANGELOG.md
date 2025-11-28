@@ -4,7 +4,7 @@ All notable changes to the "AIAT" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [0.0.2] - 2025-11-28
+## [0.0.3] - 2025-11-28
 
 ### Added
 - 初始版本发布
@@ -30,3 +30,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - VS Code 扩展 API 集成
 - WebSocket 实时通信
 - 可扩展的工具注册系统
+
+### Changed
+
+- 优化扩展图标设计，调整字母A的横线位置
+- 增强背景圆环的透明度，提升视觉效果
+- 重新调整字母T的布局和尺寸，保持图标平衡

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { AgentClient } from '../client';
+import { logger } from '../utils/logger';
 
 /**
  * 历史消息条目
@@ -61,7 +62,7 @@ export class HistoryViewProvider implements vscode.TreeDataProvider<HistoryItem>
 
             this._onDidChangeTreeData.fire();
         } catch (error) {
-            console.error('[HistoryView] Failed to refresh history:', error);
+            logger.error('Failed to refresh history', error);
         }
     }
 
@@ -141,7 +142,7 @@ export class HistoryViewProvider implements vscode.TreeDataProvider<HistoryItem>
             await this.refresh();
             vscode.window.showInformationMessage(`已删除 Run ${runId} 的历史记录`);
         } catch (error) {
-            console.error('[HistoryView] Failed to delete history:', error);
+            logger.error('Failed to delete history', error);
             vscode.window.showErrorMessage(`删除历史记录失败: ${error}`);
         }
     }
@@ -162,7 +163,7 @@ export class HistoryViewProvider implements vscode.TreeDataProvider<HistoryItem>
                 await this.refresh();
                 vscode.window.showInformationMessage('已清空所有历史记录');
             } catch (error) {
-                console.error('[HistoryView] Failed to clear history:', error);
+                logger.error('Failed to clear history', error);
                 vscode.window.showErrorMessage(`清空历史记录失败: ${error}`);
             }
         }
@@ -185,7 +186,7 @@ ${stats.newestRun ? `• 最新Run: ${new Date(stats.newestRun).toLocaleString()
 
             vscode.window.showInformationMessage(message, '确定');
         } catch (error) {
-            console.error('[HistoryView] Failed to get storage stats:', error);
+            logger.error('Failed to get storage stats', error);
             vscode.window.showErrorMessage(`获取存储统计失败: ${error}`);
         }
     }

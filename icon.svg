@@ -1,34 +1,17 @@
 <svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <!-- VS Code 风格：灰白色线条的工具+连接图标 -->
+  <!-- AT 图标 -->
 
-  <!-- 中心工具箱 -->
-  <rect x="36" y="42" width="56" height="36" rx="3" fill="none" stroke="#d4d4d4" stroke-width="4"/>
+  <!-- 背景圆形框架 -->
+  <circle cx="64" cy="64" r="58" fill="none" stroke="#ebe7e7ff" stroke-width="6" opacity="0.8"/>
 
-  <!-- 工具箱分隔 -->
-  <line x1="36" y1="52" x2="92" y2="52" stroke="#d4d4d4" stroke-width="3.5"/>
+  <!-- AIAT 字母主体 - 居中布局 -->
 
-  <!-- 代码符号 -->
-  <text x="42" y="65" font-family="monospace" font-size="12" font-weight="700" fill="#d4d4d4">&lt;/&gt;</text>
+  <!-- 字母 A -->
+  <path d="M 38 82 L 52 38 L 66 82 M 45 67 L 59 67"
+        fill="none" stroke="#d4d4d4" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- 搜索符号 -->
-  <circle cx="78" cy="60" r="7" fill="none" stroke="#d4d4d4" stroke-width="3"/>
-  <line x1="83" y1="65" x2="88" y2="70" stroke="#d4d4d4" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- 字母 T  -->
+  <rect x="52" y="34" width="40" height="8" rx="2" fill="#d4d4d4"/>
+  <rect x="76" y="40" width="8" height="46" rx="1" fill="#d4d4d4"/>
 
-  <!-- 智能连接线（上方） -->
-  <path d="M 20 20 Q 64 8 108 20" fill="none" stroke="#d4d4d4" stroke-width="3.5" stroke-linecap="round"/>
-
-  <!-- 智能连接线（下方） -->
-  <path d="M 20 108 Q 64 120 108 108" fill="none" stroke="#d4d4d4" stroke-width="3.5" stroke-linecap="round"/>
-
-  <!-- 连接点 -->
-  <circle cx="20" cy="20" r="4" fill="#d4d4d4"/>
-  <circle cx="108" cy="20" r="4" fill="#d4d4d4"/>
-  <circle cx="20" cy="108" r="4" fill="#d4d4d4"/>
-  <circle cx="108" cy="108" r="4" fill="#d4d4d4"/>
-
-  <!-- 连接线 -->
-  <line x1="23" y1="23" x2="36" y2="42" stroke="#d4d4d4" stroke-width="3" opacity="0.6"/>
-  <line x1="92" y1="42" x2="105" y2="23" stroke="#d4d4d4" stroke-width="3" opacity="0.6"/>
-  <line x1="23" y1="105" x2="36" y2="78" stroke="#d4d4d4" stroke-width="3" opacity="0.6"/>
-  <line x1="92" y1="78" x2="105" y2="105" stroke="#d4d4d4" stroke-width="3" opacity="0.6"/>
 </svg>

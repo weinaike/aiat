@@ -1,6 +1,7 @@
 /**
  * 统一状态管理器 - 解决状态不一致问题
  */
+import { logger } from '../utils/logger';
 
 // 连接状态：纯粹的WebSocket连接状态
 export type ConnectionState = 'connecting' | 'connected' | 'error' | 'closed';
@@ -157,7 +158,7 @@ export class StateManager {
         this._notifyListeners();
         this._connectionListeners.forEach(cb => cb(newState));
 
-        console.log(`[StateManager] Connection state changed: ${oldState} → ${newState}`);
+        logger.stateChange('Connection', oldState, newState);
 
         // 连接状态变化可能影响任务状态
         this.syncConnectionWithTaskState(oldState, newState);
@@ -223,7 +224,7 @@ export class StateManager {
         this._notifyListeners();
         this._taskListeners.forEach(cb => cb(newState));
 
-        console.log(`[StateManager] Task state changed: ${oldState} → ${newState}`);
+        logger.stateChange('Task', oldState, newState);
 
         this._updatingTask = false;
 
@@ -246,7 +247,7 @@ export class StateManager {
         if (this._state.runId !== runId) {
             this._state.runId = runId;
             this._notifyListeners();
-            console.log(`Run ID set to: ${runId}`);
+            logger.debug(`Run ID set to: ${runId}`);
         }
     }
 
@@ -364,7 +365,7 @@ export class StateManager {
                 this._taskListeners.forEach(cb => cb(taskState));
             }
 
-            console.log(`Batch state update - Connection: ${this._state.connection}, Task: ${this._state.task}`);
+            logger.debug('Batch state update', { connection: this._state.connection, task: this._state.task });
         }
     }
 
@@ -376,7 +377,6 @@ export class StateManager {
         // 连接中断时，任务状态应该回到 idle
         if (newConnectionState === 'closed' || newConnectionState === 'error') {
             if (this._state.task !== 'idle') {
-                console.log(`[StateManager] Connection ${newConnectionState}, resetting task state to idle`);
                 this._state.task = 'idle';
                 this._taskListeners.forEach(cb => cb('idle'));
             }
@@ -396,7 +396,7 @@ export class StateManager {
 
             // 设置新的超时
             this._stopTimeout = setTimeout(() => {
-                console.log('[StateManager] Stop timeout reached, forcing idle state');
+                logger.info('Stop timeout reached, forcing idle state');
                 if (this._state.task === 'stopping') {
                     // 强制转换到 idle 状态
                     this.updateTaskState('idle', '停止操作超时，自动恢复');

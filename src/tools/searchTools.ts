@@ -111,7 +111,7 @@ export class TextSearchTool extends BaseTool {
  */
 export class FileSearchTool extends BaseTool {
     definition: ToolDefinition = {
-        name: 'file_search',
+        name: 'glob_search',
         description: '按文件名模式搜索文件',
         inputSchema: {
             type: 'object',
@@ -205,5 +205,104 @@ export class SymbolSearchTool extends BaseTool {
         }));
 
         return { results, totalCount: results.length };
+    }
+}
+
+/**
+ * 环境信息工具
+ */
+export class GetEnvironmentTool extends BaseTool {
+    definition: ToolDefinition = {
+        name: 'get_environment',
+        description: '获取系统与开发环境信息',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+        }
+    };
+
+    async execute(_params: any): Promise<any> {
+        const workspaceFolders = vscode.workspace.workspaceFolders || [];
+        const activeTextEditor = vscode.window.activeTextEditor;
+
+        // 获取环境信息
+        const env = process.env;
+
+        // 获取Node.js版本
+        const nodeVersion = process.version;
+
+        // 获取平台信息
+        const platform = {
+            os: process.platform,
+            arch: process.arch,
+            version: require('os').release(),
+            hostname: require('os').hostname(),
+            totalMemory: require('os').totalmem(),
+            freeMemory: require('os').freemem(),
+            cpus: require('os').cpus().length
+        };
+
+        // 获取VS Code版本
+        const vscodeVersion = vscode.version;
+
+        // 获取工作区信息
+        const workspaceInfo = workspaceFolders.map(folder => ({
+            name: folder.name,
+            path: folder.uri.fsPath,
+            uri: folder.uri.toString()
+        }));
+
+        // 获取当前文件信息
+        const currentFile = activeTextEditor ? {
+            path: activeTextEditor.document.uri.fsPath,
+            language: activeTextEditor.document.languageId,
+            lineCount: activeTextEditor.document.lineCount,
+            fileName: activeTextEditor.document.fileName
+        } : null;
+
+        // 获取配置信息
+        const config = vscode.workspace.getConfiguration();
+        const aiatConfig = {
+            serverPort: config.get('aiat.serverPort'),
+            autoStart: config.get('aiat.autoStart'),
+            authToken: config.get('aiat.authToken'),
+            enableFileOperations: config.get('aiat.enableFileOperations'),
+            enableCodeSearch: config.get('aiat.enableCodeSearch'),
+            enableTerminal: config.get('aiat.enableTerminal'),
+            agentServer: config.get('aiat.agentServer.url'),
+            autoConnect: config.get('aiat.agentServer.autoConnect')
+        };
+
+        // 获取扩展信息
+        const extensions = vscode.extensions.all.map(ext => ({
+            name: ext.id,
+            version: ext.packageJSON?.version,
+            isActive: ext.isActive
+        }));
+
+        return {
+            timestamp: new Date().toISOString(),
+            environment: {
+                node: nodeVersion,
+                vscode: vscodeVersion,
+                platform
+            },
+            workspace: {
+                folders: workspaceInfo,
+                currentFile,
+                config: aiatConfig
+            },
+            system: {
+                path: env.PATH,
+                home: env.HOME || env.USERPROFILE,
+                shell: env.SHELL || env.COMSPEC,
+                workspaceRoot: workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : null
+            },
+            extensions: {
+                total: extensions.length,
+                active: extensions.filter(ext => ext.isActive).length,
+                installed: extensions.slice(0, 50) // 限制返回数量
+            }
+        };
     }
 }

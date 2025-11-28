@@ -4,6 +4,7 @@
  */
 
 import { AgentMessage } from '../client';
+import { logger } from './logger';
 
 export interface StoredMessage extends AgentMessage {
     runId: string;
@@ -84,10 +85,8 @@ export class MessageStorage {
 
             // 保存到全局状态
             await this.globalState.update(this.STORAGE_KEY, history);
-
-            console.log(`[MessageStorage] Saved message for run ${runId}, total messages: ${history[runId].messages.length}`);
         } catch (error) {
-            console.error('[MessageStorage] Failed to save message:', error);
+            logger.error('Failed to save message', error);
         }
     }
 
@@ -110,7 +109,7 @@ export class MessageStorage {
             // 移除runId字段，返回原始AgentMessage格式
             return runHistory.messages.map(({ runId: _, ...message }) => message);
         } catch (error) {
-            console.error('[MessageStorage] Failed to load messages for run:', error);
+            logger.error('Failed to load messages for run', error);
             return [];
         }
     }
@@ -140,7 +139,7 @@ export class MessageStorage {
                 messageCount: data.messages.length
             })).sort((a, b) => b.lastUpdated - a.lastUpdated);
         } catch (error) {
-            console.error('[MessageStorage] Failed to load history list:', error);
+            logger.error('Failed to load history list', error);
             return [];
         }
     }
@@ -162,7 +161,7 @@ export class MessageStorage {
                 await this.globalState.update(this.STORAGE_KEY, history);
             }
         } catch (error) {
-            console.error('[MessageStorage] Failed to set run title:', error);
+            logger.error('Failed to set run title', error);
         }
     }
 
@@ -180,10 +179,10 @@ export class MessageStorage {
             if (history[runId]) {
                 delete history[runId];
                 await this.globalState.update(this.STORAGE_KEY, history);
-                console.log(`[MessageStorage] Deleted history for run ${runId}`);
+                logger.info(`Deleted history for run ${runId}`);
             }
         } catch (error) {
-            console.error('[MessageStorage] Failed to delete run history:', error);
+            logger.error('Failed to delete run history', error);
         }
     }
 
@@ -193,9 +192,9 @@ export class MessageStorage {
     async clearAllHistory(): Promise<void> {
         try {
             await this.globalState.update(this.STORAGE_KEY, {});
-            console.log('[MessageStorage] Cleared all message history');
+            logger.info('Cleared all message history');
         } catch (error) {
-            console.error('[MessageStorage] Failed to clear history:', error);
+            logger.error('Failed to clear history', error);
         }
     }
 
@@ -207,7 +206,7 @@ export class MessageStorage {
             const history = this.globalState.get(this.STORAGE_KEY) as MessageHistory;
             return history || {};
         } catch (error) {
-            console.error('[MessageStorage] Failed to load history:', error);
+            logger.error('Failed to load history', error);
             return {};
         }
     }
@@ -270,7 +269,7 @@ export class MessageStorage {
                 newestRun: Math.max(...timestamps)
             };
         } catch (error) {
-            console.error('[MessageStorage] Failed to get storage stats:', error);
+            logger.error('Failed to get storage stats', error);
             return {
                 totalRuns: 0,
                 totalMessages: 0,
@@ -302,9 +301,8 @@ export class MessageStorage {
             history[runId].lastUpdated = Date.now();
 
             await this.globalState.update(this.STORAGE_KEY, history);
-            console.log(`[MessageStorage] Saved active group for run ${runId}, messages: ${activeGroup.messages.length}`);
         } catch (error) {
-            console.error('[MessageStorage] Failed to save active group:', error);
+            logger.error('Failed to save active group', error);
         }
     }
 
@@ -322,7 +320,7 @@ export class MessageStorage {
 
             return runHistory?.activeGroup || null;
         } catch (error) {
-            console.error('[MessageStorage] Failed to get active group:', error);
+            logger.error('Failed to get active group', error);
             return null;
         }
     }
@@ -342,10 +340,9 @@ export class MessageStorage {
                 delete history[runId].activeGroup;
                 history[runId].lastUpdated = Date.now();
                 await this.globalState.update(this.STORAGE_KEY, history);
-                console.log(`[MessageStorage] Cleared active group for run ${runId}`);
             }
         } catch (error) {
-            console.error('[MessageStorage] Failed to clear active group:', error);
+            logger.error('Failed to clear active group', error);
         }
     }
 
@@ -354,13 +351,6 @@ export class MessageStorage {
      */
     private extractReadableInfo(runHistory: any, message: AgentMessage): void {
         try {
-            console.log(`[MessageStorage] Extracting info from message:`, {
-                type: message.type,
-                content: message.content?.substring(0, 100),
-                source: message.source,
-                hasData: !!message.data
-            });
-
             // 提取智能体名称
             if (message.source && typeof message.source === 'string') {
                 // 从 source 中提取智能体名称（格式可能是 "flow.node.agent" 或直接是名称）
@@ -391,24 +381,22 @@ export class MessageStorage {
             if (taskContent) {
                 runHistory.taskDescription = this.truncateText(taskContent, 100);
                 runHistory.title = this.generateRunTitle(taskContent);
-                console.log(`[MessageStorage] Extracted title: "${runHistory.title}" from content: "${taskContent.substring(0, 50)}..."`);
             } else {
                 // 如果都没有内容，设置默认标题
                 runHistory.title = message.type === 'start' ? '新任务' : '智能体任务';
-                console.log(`[MessageStorage] No content found, using default title: "${runHistory.title}"`);
             }
 
             // 设置第一条消息时间
             runHistory.firstMessageTime = message.timestamp;
 
-            console.log(`[MessageStorage] Final extracted info:`, {
+            logger.debug(`Final extracted info:`, {
                 agentName: runHistory.agentName,
                 title: runHistory.title,
                 taskDescription: runHistory.taskDescription?.substring(0, 50) + '...',
                 firstMessageTime: runHistory.firstMessageTime
             });
         } catch (error) {
-            console.error('[MessageStorage] Failed to extract readable info:', error);
+            logger.error('Failed to extract readable info', error);
             // 设置默认值
             runHistory.title = '智能体任务';
         }
@@ -422,7 +410,7 @@ export class MessageStorage {
             return '新任务';
         }
 
-        console.log(`[MessageStorage] Generating title from content: "${content}"`);
+        logger.debug(`Generating title from content: "${content}"`);
 
         // 移除常见的前缀
         const prefixes = [
@@ -465,11 +453,8 @@ export class MessageStorage {
             const fallbackTitle = content.length > 20 ?
                 this.truncateText(content, 20) :
                 '智能体任务';
-            console.log(`[MessageStorage] Title empty after processing, using fallback: "${fallbackTitle}"`);
             return fallbackTitle;
         }
-
-        console.log(`[MessageStorage] Generated title: "${title}"`);
         return title;
     }
 

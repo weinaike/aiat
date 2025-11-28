@@ -3,6 +3,7 @@ import WebSocket from 'ws';
 import { StateManager, ConnectionState, TaskState } from './stateManager';
 import { errorHandler, ErrorType, ErrorSeverity } from '../utils/errorHandler';
 import { MessageStorage } from '../utils/messageStorage';
+import { logger } from '../utils/logger';
 
 /**
  * 消息类型
@@ -139,11 +140,11 @@ export class AgentClient {
             try {
                 const stat = await fs.stat(codebase);
                 if (!stat.isDirectory()) {
-                    console.log(`[AgentClient] Codebase path exists but is not a directory: ${codebase}`);
+                    logger.debug(`Codebase path exists but is not a directory: ${codebase}`);
                     return false;
                 }
             } catch (error) {
-                console.log(`[AgentClient] Codebase directory does not exist: ${codebase}`);
+                logger.debug(`Codebase directory does not exist: ${codebase}`);
                 return false;
             }
 
@@ -151,19 +152,19 @@ export class AgentClient {
             try {
                 await fs.access(codebase, fs.constants.R_OK);
             } catch (error) {
-                console.log(`[AgentClient] Codebase directory is not readable: ${codebase}`);
+                logger.debug(`Codebase directory is not readable: ${codebase}`);
                 return false;
             }
 
             // 可选：检查是否包含基本的项目文件（如package.json、.git等）
             const hasProjectFiles = await this.checkProjectFiles(codebase);
             if (!hasProjectFiles) {
-                console.log(`[AgentClient] Warning: Codebase directory may not be a valid project: ${codebase}`);
+                logger.debug(`Codebase directory may not be a valid project: ${codebase}`);
             }
 
             return true;
         } catch (error) {
-            console.error(`[AgentClient] Error validating codebase: ${error}`);
+            logger.error(`Error validating codebase: ${error}`, error);
             return false;
         }
     }
@@ -193,7 +194,7 @@ export class AgentClient {
             const files = await fs.readdir(codebase);
             return projectFiles.some(file => files.includes(file));
         } catch (error) {
-            console.log(`[AgentClient] Error checking project files: ${error}`);
+            logger.debug(`Error checking project files: ${error}`);
             return false;
         }
     }
@@ -230,8 +231,7 @@ export class AgentClient {
     private getDefaultCodebase(): string {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         const codebase = workspaceFolder?.uri.fsPath || '';
-        console.log('[AgentClient] getDefaultCodebase - workspaceFolder:', workspaceFolder);
-        console.log('[AgentClient] getDefaultCodebase - extracted path:', codebase);
+        logger.debug('getDefaultCodebase', { workspaceFolder, codebase });
         return codebase;
     }
 
@@ -499,7 +499,7 @@ export class AgentClient {
 
             // 异步保存到持久化存储
             this._messageStorage.saveMessage(this.currentRunId, agentMessage).catch(error => {
-                console.error('[AgentClient] Failed to save outgoing message:', error);
+                logger.error('Failed to save outgoing message', error);
             });
 
             this._onMessage.fire(agentMessage);
@@ -612,13 +612,9 @@ export class AgentClient {
                 return false;
             }
 
-            console.log(`[AgentClient] Codebase validation passed: ${codebase}`);
+            logger.info(`Codebase validation passed: ${codebase}`);
 
             const teamConfig = this.getTeamConfig(agentId);
-
-            // 验证team_config中的codebase字段
-            console.log('[AgentClient] Generated team_config:', JSON.stringify(teamConfig, null, 2));
-            console.log('[AgentClient] Codebase in team_config:', (teamConfig as any).codebase);
 
             const startMessage = {
                 type: 'start',
@@ -627,8 +623,7 @@ export class AgentClient {
                 team_config: teamConfig
             };
 
-            console.log('[AgentClient] Sending start message:', JSON.stringify(startMessage, null, 2));
-
+  
             const success = await this.sendMessageWithErrorHandling(startMessage, ErrorType.TASK_START_ERROR);
             if (!success) {
                 // 发送失败，重置状态
@@ -747,7 +742,6 @@ export class AgentClient {
                 content = `系统状态: ${messageData.status}`;
                 break;
             case 'message':
-                console.log('[AgentClient] Processing message type, original data:', data);
                 const msgData = messageData.data as {
                     id?: string;
                     name?: string;
@@ -756,15 +750,11 @@ export class AgentClient {
                     source?: string;
                     created_at?: string;
                 };
-                console.log('[AgentClient] Extracted msgData:', msgData);
-                console.log('[AgentClient] msgData.content:', msgData.content);
-                console.log('[AgentClient] msgData.name:', msgData.name);
-
+  
                 content = msgData.name ?
                     `[${msgData.name}] ${msgData.content || ''}` :
                     (msgData.content || JSON.stringify(data));
 
-                console.log('[AgentClient] Final content for AgentMessage:', content);
                 break;
             case 'result':
                 const resultData = messageData.data as {
@@ -852,7 +842,7 @@ export class AgentClient {
 
         // 异步保存到持久化存储
         this._messageStorage.saveMessage(this.currentRunId, message).catch(error => {
-            console.error('[AgentClient] Failed to save incoming message:', error);
+            logger.error('Failed to save incoming message', error);
         });
 
         this._onMessage.fire(message);
@@ -1008,7 +998,6 @@ export class AgentClient {
         }
 
         try {
-            console.log(`[AgentClient] Loading history for run ${runId}`);
             const historyMessages = await this._messageStorage.getMessagesForRun(runId);
 
             // 清空当前内存中的消息
@@ -1017,7 +1006,7 @@ export class AgentClient {
             // 加载历史消息到内存
             this._messages.push(...historyMessages);
 
-            console.log(`[AgentClient] Loaded ${historyMessages.length} messages for run ${runId}`);
+            logger.info(`Loaded ${historyMessages.length} messages for run ${runId}`);
 
             // 触发历史加载完成事件，而不是逐个触发消息事件
             this._onHistoryLoaded.fire({
@@ -1025,7 +1014,7 @@ export class AgentClient {
                 messages: historyMessages
             });
         } catch (error) {
-            console.error(`[AgentClient] Failed to load history for run ${runId}:`, error);
+            logger.error(`Failed to load history for run ${runId}`, error);
         }
     }
 

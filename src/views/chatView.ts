@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { AgentClient, AgentMessage, ConnectionState, TaskState, HistoryLoadedEvent } from '../client';
 import { ActiveGroup } from '../utils/messageStorage';
+import { logger } from '../utils/logger';
 
 /**
  * 聊天视图 - 显示智能体消息的 Webview
@@ -73,7 +74,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         // 监听历史加载完成事件
         this._agentClient.onHistoryLoaded((event: HistoryLoadedEvent) => {
-            console.log(`[ChatView] History loaded for run ${event.runId}, ${event.messages.length} messages`);
+            logger.info(`History loaded for run ${event.runId}, ${event.messages.length} messages`);
             // 直接同步所有历史消息到UI，不通过addMessage避免重新分组处理
             this.syncMessages();
             // 恢复活跃分组状态（如果有）
@@ -82,13 +83,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         // 监听连接状态变化 - 直接监听状态管理器，避免双重事件
         this._agentClient.stateManager.onConnectionChange((state) => {
-            console.log(`[ChatView] Connection state changed to: ${state}`);
+            logger.stateChange('Connection', 'previous', state);
             this.updateConnectionState(state);
         });
 
         // 监听任务状态变化 - 直接监听状态管理器，避免双重事件
         this._agentClient.stateManager.onTaskChange((state) => {
-            console.log(`[ChatView] Task state changed to: ${state}`);
+            logger.stateChange('Task', 'previous', state);
             this.updateTaskState(state);
         });
 
@@ -96,7 +97,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this._agentClient.stateManager.onChange((appState) => {
             const currentRunId = this._agentClient.currentRunId;
             if (currentRunId && appState.runId !== currentRunId) {
-                console.log(`[ChatView] RunId changed to: ${currentRunId}, loading history`);
+                logger.stateChange('RunId', appState.runId || 'None', currentRunId);
                 this.loadHistoryForRun(currentRunId);
             }
         });
@@ -126,7 +127,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 this.saveCurrentState();
             } else {
                 // 侧边栏重新打开，恢复状态（resolveWebviewView已处理）
-                console.log('[ChatView] Webview became visible, state restored in resolveWebviewView');
+                logger.debug('Webview became visible, state restored in resolveWebviewView');
             }
         });
 
@@ -172,7 +173,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     // 响应webview的状态请求
                     this.updateConnectionState(this._agentClient.state);
                     this.updateTaskState(this._agentClient.taskState);
-                    console.log('[ChatView] Responded to requestState - Connection:', this._agentClient.state, 'Task:', this._agentClient.taskState);
+                    logger.debug(`Responded to requestState - Connection: ${this._agentClient.state}, Task: ${this._agentClient.taskState}`);
                     break;
             }
         });
@@ -183,7 +184,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
             // 1. 优先从持久化存储恢复完整状态
             if (currentRunId) {
-                console.log(`[ChatView] resolveWebviewView: Loading history for current run ${currentRunId}`);
+                logger.info(`Loading history for current run ${currentRunId}`);
                 await this.loadHistoryForRun(currentRunId);
 
                 // 2. 恢复活跃分组状态
@@ -208,7 +209,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         // 强制立即同步当前状态
         setTimeout(() => {
-            console.log('[ChatView] Force immediate state sync after webview ready');
+            logger.debug('Force immediate state sync after webview ready');
             this.updateConnectionState(this._agentClient.state);
             this.updateTaskState(this._agentClient.taskState);
         }, 500);
@@ -535,7 +536,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     activeGroup
                 );
             } catch (error) {
-                console.error('[ChatView] Failed to save active group state:', error);
+                logger.error('Failed to save active group state:', error);
             }
         }
     }
@@ -549,7 +550,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 this._agentClient.currentRunId || ''
             );
         } catch (error) {
-            console.error('[ChatView] Failed to clear active group state:', error);
+            logger.error('Failed to clear active group state:', error);
         }
     }
 
@@ -605,13 +606,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
             const storageKey = `chatView.currentRun.${this._agentClient.currentRunId}`;
             this._context.globalState.update(storageKey, stateToSave);
-            console.log('[ChatView] State saved to global storage:', {
-                runId: this._agentClient.currentRunId,
-                messageCount: this._currentProcessGroup.length,
-                groupId: this._currentGroupId
-            });
+            logger.info(`State saved to global storage - runId: ${this._agentClient.currentRunId}, messageCount: ${this._currentProcessGroup.length}, groupId: ${this._currentGroupId}`);
         } catch (error) {
-            console.error('[ChatView] Failed to save current state:', error);
+            logger.error('Failed to save current state:', error);
         }
     }
 
@@ -636,7 +633,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             } | undefined;
 
             if (savedState && savedState.messages) {
-                console.log('[ChatView] Restoring messages from global storage:', savedState.messages.length);
+                logger.info(`Restoring messages from global storage: ${savedState.messages.length}`);
 
                 // 恢复消息到当前处理组
                 this._currentProcessGroup = savedState.messages || [];
@@ -645,7 +642,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 this._lastMessageTime = savedState.lastMessageTime || Date.now();
             }
         } catch (error) {
-            console.error('[ChatView] Failed to restore from global storage:', error);
+            logger.error('Failed to restore from global storage:', error);
         }
     }
 
@@ -659,7 +656,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             );
 
             if (activeGroup && !activeGroup.isComplete) {
-                console.log(`[ChatView] Restoring active group: ${activeGroup.id}, messages: ${activeGroup.messages.length}`);
+                logger.info(`Restoring active group: ${activeGroup.id}, messages: ${activeGroup.messages.length}`);
 
                 // 恢复分组状态
                 this._currentGroupId = activeGroup.id;
@@ -682,7 +679,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 }
             }
         } catch (error) {
-            console.error('[ChatView] Failed to restore active group state:', error);
+            logger.error('Failed to restore active group state:', error);
         }
     }
 
@@ -727,13 +724,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
 
         try {
-            console.log(`[ChatView] Loading history for run ${runId}`);
+            logger.info(`Loading history for run ${runId}`);
             await this._agentClient.loadHistoryForRun(runId);
 
             // 重新同步消息到UI
             this.syncMessages();
         } catch (error) {
-            console.error(`[ChatView] Failed to load history for run ${runId}:`, error);
+            logger.error(`Failed to load history for run ${runId}:`, error);
         }
     }
 
@@ -760,7 +757,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 taskState: taskState !== undefined ? taskState : this._agentClient.taskState
             };
             this._view.webview.postMessage(message);
-            console.log(`[ChatView] Sent updateState: ${state}, taskState: ${taskState || this._agentClient.taskState}, runId: ${runId || this._agentClient.currentRunId}`);
+            logger.debug(`Sent updateState: ${state}, taskState: ${taskState || this._agentClient.taskState}, runId: ${runId || this._agentClient.currentRunId}`);
         }
     }
 
@@ -891,12 +888,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 break;
         }
 
-        // 如果没有内容，不显示
-        console.log('[formatMessage] Final check - displayContent:', displayContent);
-        console.log('[formatMessage] Trim check - displayContent.trim():', displayContent?.trim());
 
         if (!displayContent || displayContent.trim() === '') {
-            console.log('[formatMessage] Returning null - no content to display');
+            logger.debug('[formatMessage] Returning null - no content to display');
             return null;
         }
 
@@ -908,7 +902,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             source: messageSource
         };
 
-        console.log('[formatMessage] Returning formatted message:', result);
+        logger.debug('[formatMessage] Returning formatted message:', result);
         return result;
     }
 
@@ -925,7 +919,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 // 如果有当前runId，先加载历史消息
                 const currentRunId = this._agentClient.currentRunId;
                 if (currentRunId) {
-                    console.log(`[ChatView] Refresh: Loading history for current run ${currentRunId}`);
+                    logger.info(`Refresh: Loading history for current run ${currentRunId}`);
                     await this.loadHistoryForRun(currentRunId);
                 } else {
                     // 没有runId时，同步内存中的消息
@@ -1523,6 +1517,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 <option value="3">文档生成</option>
                 <option value="4">环境构建</option>
                 <option value="5">代码翻译</option>
+                <option value="6">通用代码</option>
             </select>
         </div>
         <input type="text" id="messageInput" placeholder="输入任务描述或消息..." disabled />
@@ -1530,7 +1525,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     </div>
     
     <script>
-        console.log('=== SCRIPT LOADING ===');
+        // console.log('=== SCRIPT LOADING ===');
 
         const vscode = acquireVsCodeApi();
 
@@ -1547,7 +1542,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         // 初始化 DOM 元素
         function initializeDOMElements() {
-            console.log('=== INITIALIZING DOM ELEMENTS ===');
+            // console.log('=== INITIALIZING DOM ELEMENTS ===');
             statusDot = document.getElementById('statusDot');
             statusText = document.getElementById('statusText');
             connectBtn = document.getElementById('connectBtn');
@@ -1565,25 +1560,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             // 智能体选择器
             agentSelect = document.getElementById('agentSelect');
 
-            console.log('DOM Elements initialized:', {
-                statusDot: !!statusDot,
-                statusText: !!statusText,
-                connectBtn: !!connectBtn,
-                disconnectBtn: !!disconnectBtn,
-                messageInput: !!messageInput,
-                sendBtn: !!sendBtn,
-                agentSelect: !!agentSelect
-            });
+            // console.log('DOM Elements initialized:', {
+            //     statusDot: !!statusDot,
+            //     statusText: !!statusText,
+            //     connectBtn: !!connectBtn,
+            //     disconnectBtn: !!disconnectBtn,
+            //     messageInput: !!messageInput,
+            //     sendBtn: !!sendBtn,
+            //     agentSelect: !!agentSelect
+            // });
         }
 
         // 页面加载时的初始化（简化版本）
         function initializePage() {
             if (isInitialized) {
-                console.log('Already initialized, skipping...');
+                // console.log('Already initialized, skipping...');
                 return;
             }
 
-            console.log('=== INITIALIZING PAGE ===');
+            // console.log('=== INITIALIZING PAGE ===');
 
             // 首先初始化DOM元素
             initializeDOMElements();
@@ -1603,58 +1598,58 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             updateButtonState();
 
             // 请求当前状态
-            console.log('Requesting current state from extension...');
+            // console.log('Requesting current state from extension...');
             vscode.postMessage({ type: 'requestState' });
 
-            console.log('=== PAGE INITIALIZATION COMPLETE ===');
+            // console.log('=== PAGE INITIALIZATION COMPLETE ===');
         }
 
         // 添加所有事件监听器
         function addEventListeners() {
-            console.log('=== ADDING EVENT LISTENERS ===');
+            // console.log('=== ADDING EVENT LISTENERS ===');
 
             // 连接按钮
             if (connectBtn) {
                 connectBtn.addEventListener('click', () => {
-                    console.log('CONNECT BUTTON CLICKED');
+                    // console.log('CONNECT BUTTON CLICKED');
                     connect();
                 });
-                console.log('✓ Connect button listener added');
+                // console.log('✓ Connect button listener added');
             } else {
-                console.log('✗ Connect button not found');
+                // console.log('✗ Connect button not found');
             }
 
             // 断开按钮
             if (disconnectBtn) {
                 disconnectBtn.addEventListener('click', () => {
-                    console.log('DISCONNECT BUTTON CLICKED');
+                    // console.log('DISCONNECT BUTTON CLICKED');
                     disconnect();
                 });
-                console.log('✓ Disconnect button listener added');
+                // console.log('✓ Disconnect button listener added');
             } else {
-                console.log('✗ Disconnect button not found');
+                // console.log('✗ Disconnect button not found');
             }
 
             // 清空按钮
             if (clearBtn) {
                 clearBtn.addEventListener('click', () => {
-                    console.log('CLEAR BUTTON CLICKED');
+                    // console.log('CLEAR BUTTON CLICKED');
                     clearMessages();
                 });
-                console.log('✓ Clear button listener added');
+                // console.log('✓ Clear button listener added');
             } else {
-                console.log('✗ Clear button not found');
+                // console.log('✗ Clear button not found');
             }
 
             // 发送按钮 - 多功能按钮
             if (sendBtn) {
                 sendBtn.addEventListener('click', () => {
-                    console.log('SEND BUTTON CLICKED');
+                    // console.log('SEND BUTTON CLICKED');
                     handleSendButtonClick();
                 });
-                console.log('✓ Send button listener added');
+                // console.log('✓ Send button listener added');
             } else {
-                console.log('✗ Send button not found');
+                // console.log('✗ Send button not found');
             }
 
             // 输入框回车事件
@@ -1667,10 +1662,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                         }
                     }
                 });
-                console.log('✓ Message input enter listener added');
+                // console.log('✓ Message input enter listener added');
             }
 
-            console.log('=== EVENT LISTENERS COMPLETE ===');
+            // console.log('=== EVENT LISTENERS COMPLETE ===');
         }
 
         // 处理发送按钮点击 - 根据状态执行不同操作
@@ -1690,13 +1685,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         // 任务状态判断函数
         function isTaskRunning() {
             const result = ['starting', 'running', 'awaiting_input'].includes(taskState);
-            console.log('isTaskRunning() - taskState:', taskState, 'result:', result);
+            // console.log('isTaskRunning() - taskState:', taskState, 'result:', result);
             return result;
         }
 
         function canStartTask() {
             const result = isConnected && ['idle', 'completed', 'error'].includes(taskState);
-            console.log('canStartTask() - isConnected:', isConnected, 'taskState:', taskState, 'result:', result);
+            // console.log('canStartTask() - isConnected:', isConnected, 'taskState:', taskState, 'result:', result);
             return result;
         }
 
@@ -1819,12 +1814,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         // 更新按钮状态和文本
         function updateButtonState() {
-            console.log('[updateButtonState] Called with:', {
-                isConnected,
-                taskState,
-                awaitingInput,
-                buttonExists: !!sendBtn
-            });
+            // console.log('[updateButtonState] Called with:', {
+            //     isConnected,
+            //     taskState,
+            //     awaitingInput,
+            //     buttonExists: !!sendBtn
+            // });
 
             if (!sendBtn || !messageInput || !agentSelect) {
                 return;
@@ -1916,18 +1911,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         if (document.readyState === 'loading') {
             // 如果文档还在加载，等待DOMContentLoaded
             document.addEventListener('DOMContentLoaded', () => {
-                console.log('=== DOM CONTENT LOADED ===');
+                // console.log('=== DOM CONTENT LOADED ===');
                 initializePage();
             });
         } else {
             // 如果文档已经加载完成，立即初始化
-            console.log('=== DOM ALREADY READY ===');
+            // console.log('=== DOM ALREADY READY ===');
             initializePage();
         }
 
         // 备用的load事件，确保初始化
         window.addEventListener('load', () => {
-            console.log('=== WINDOW LOADED (FALLBACK) ===');
+            // console.log('=== WINDOW LOADED (FALLBACK) ===');
             if (!isInitialized) {
                 initializePage();
             }
@@ -1957,18 +1952,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }, 5000);
 
         function updateState(state, runId = null, taskStateParam = null) {
-            console.log('=== UPDATE STATE CALLED ===');
-            console.log('State:', state, 'RunId:', runId, 'TaskState:', taskStateParam);
-            console.log('Elements:', {
-                statusDot: !!statusDot,
-                statusText: !!statusText,
-                connectBtn: !!connectBtn,
-                disconnectBtn: !!disconnectBtn
-            });
+            // console.log('=== UPDATE STATE CALLED ===');
+            // console.log('State:', state, 'RunId:', runId, 'TaskState:', taskStateParam);
+            // console.log('Elements:', {
+            //     statusDot: !!statusDot,
+            //     statusText: !!statusText,
+            //     connectBtn: !!connectBtn,
+            //     disconnectBtn: !!disconnectBtn
+            // });
 
             // 如果DOM元素还没初始化，等待页面加载完成
             if (!isInitialized) {
-                console.log('Page not initialized yet, waiting for load event...');
+                // console.log('Page not initialized yet, waiting for load event...');
                 // 使用事件监听而不是无限重试
                 window.addEventListener('load', () => {
                     updateState(state, runId, taskStateParam);
@@ -1978,7 +1973,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
             // 如果DOM元素还没初始化，延迟处理（最多重试3次）
             if (!statusDot || !statusText || !connectBtn || !disconnectBtn || !messageInput || !sendBtn || !agentSelect) {
-                console.log('DOM elements not ready, will retry once after initialization');
+                // console.log('DOM elements not ready, will retry once after initialization');
                 // 等待下一个事件循环后重试一次
                 setTimeout(() => {
                     // 重新获取元素引用
@@ -2004,12 +1999,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 taskState = taskStateParam;
             }
 
-            console.log('[updateState] ' + oldIsConnected + '->' + isConnected + ', ' + oldTaskState + '->' + taskState);
+            // console.log('[updateState] ' + oldIsConnected + '->' + isConnected + ', ' + oldTaskState + '->' + taskState);
 
             // 更新状态点
             if (statusDot) {
                 statusDot.className = 'status-dot ' + state;
-                console.log('Updated statusDot className to:', statusDot.className);
+                // console.log('Updated statusDot className to:', statusDot.className);
             } else {
                 console.log('statusDot element not found!');
             }
@@ -2027,34 +2022,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
             // 更新状态文本和按钮显示
             if (statusText) {
-                console.log('🟢 UPDATING STATUS TEXT TO:', state);
-                console.log('🔍 ELEMENTS CHECK:', {
-                    connectBtn: !!connectBtn,
-                    disconnectBtn: !!disconnectBtn,
-                    messageInput: !!messageInput,
-                    sendBtn: !!sendBtn
-                });
+                // console.log('🟢 UPDATING STATUS TEXT TO:', state);
+                // console.log('🔍 ELEMENTS CHECK:', {
+                //     connectBtn: !!connectBtn,
+                //     disconnectBtn: !!disconnectBtn,
+                //     messageInput: !!messageInput,
+                //     sendBtn: !!sendBtn
+                // });
 
                 switch (state) {
                     case 'connected':
                         statusText.textContent = '已连接';
-                        console.log('🔧 SETTING CONNECTED STATE');
+                        // console.log('🔧 SETTING CONNECTED STATE');
                         try {
                             if (connectBtn) {
                                 connectBtn.style.display = 'none';
-                                console.log('✅ connectBtn display set to none');
+                                // console.log('✅ connectBtn display set to none');
                             } else {
-                                console.log('❌ connectBtn is null');
+                                // console.log('❌ connectBtn is null');
                             }
                             if (disconnectBtn) {
                                 disconnectBtn.style.display = 'inline-block';
-                                console.log('✅ disconnectBtn display set to inline-block');
+                                // console.log('✅ disconnectBtn display set to inline-block');
                             } else {
-                                console.log('❌ disconnectBtn is null');
+                                // console.log('❌ disconnectBtn is null');
                             }
                             // 更新按钮状态
                             updateButtonState();
-                            console.log('✅ State updated to connected');
+                            // console.log('✅ State updated to connected');
                         } catch (error) {
                             console.log('❌ ERROR IN CONNECTED STATE:', error.message);
                         }
@@ -2135,7 +2130,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         function addMessage(msg) {
             // 如果消息容器还没准备好，等待页面加载完成
             if (!messagesContainer) {
-                console.log('Messages container not ready, waiting for initialization...');
+                // console.log('Messages container not ready, waiting for initialization...');
                 // 使用事件监听而不是无限重试
                 if (!isInitialized) {
                     window.addEventListener('load', () => {
@@ -2278,20 +2273,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             messageDiv.classList.toggle('collapsed');
 
             // 调试输出
-            if (isDebugMode) {
+            if (window.location.search.includes('debug=true')) {
                 console.log('Single message toggled:', { wasCollapsed: isCollapsed, isNowCollapsed: !isCollapsed });
             }
         }
 
         function setupProcessGroupEvents(messageDiv) {
             // 事件已经通过onclick处理，这里可以添加其他需要的处理逻辑
-            console.log('Process group message created');
+            // console.log('Process group message created');
         }
 
         function syncMessages(messages) {
             // 如果消息容器还没准备好，等待页面加载完成
             if (!messagesContainer) {
-                console.log('Messages container not ready, waiting for initialization...');
+                // console.log('Messages container not ready, waiting for initialization...');
                 // 使用事件监听而不是无限重试
                 if (!isInitialized) {
                     window.addEventListener('load', () => {
@@ -2330,9 +2325,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
         
         function updateTaskState(state) {
-            console.log('[updateTaskState] Received state update:', state, 'current taskState:', taskState);
+            // console.log('[updateTaskState] Received state update:', state, 'current taskState:', taskState);
             taskState = state;
-            console.log('[updateTaskState] Task state updated to:', taskState);
+            // console.log('[updateTaskState] Task state updated to:', taskState);
 
             // 使用统一的控制面板更新函数
             updateControlPanelState();
@@ -2342,7 +2337,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'idle':
                 case 'completed':
                 case 'error':
-                    console.log('[updateTaskState] Hiding input request for state:', state);
+                    // console.log('[updateTaskState] Hiding input request for state:', state);
                     hideInputRequest();
                     break;
                 case 'awaiting_input':
@@ -2363,7 +2358,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         function updateProcessGroup(groupMsg, isComplete) {
             // 如果消息容器还没准备好，等待页面加载完成
             if (!messagesContainer) {
-                console.log('Messages container not ready for process group update...');
+                // console.log('Messages container not ready for process group update...');
                 return;
             }
 
@@ -2459,7 +2454,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         // 处理来自扩展的消息
         window.addEventListener('message', (event) => {
             const data = event.data;
-            console.log('[Webview] Received message:', data.type, data);
+            // console.log('[Webview] Received message:', data.type, data);
 
             switch (data.type) {
                 case 'addMessage':
@@ -2475,11 +2470,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     syncMessages([]);
                     break;
                 case 'updateState':
-                    console.log('[Webview] Calling updateState with:', data.state, data.runId, data.taskState);
+                    // console.log('[Webview] Calling updateState with:', data.state, data.runId, data.taskState);
                     updateState(data.state, data.runId, data.taskState);
                     break;
                 case 'updateTaskState':
-                    console.log('[Webview] Calling updateTaskState with:', data.taskState);
+                    // console.log('[Webview] Calling updateTaskState with:', data.taskState);
                     updateTaskState(data.taskState);
                     break;
                 case 'showInputRequest':

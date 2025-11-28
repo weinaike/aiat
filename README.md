@@ -245,6 +245,87 @@ curl -X POST http://localhost:9527/mcp \
    - 蓝色边框 = 收到的消息
    - 绿色边框 = 发送的消息
 
+## 📦 发布
+
+### 使用一键发布工具
+
+项目提供了自动化发布工具，简化发布流程：
+
+```bash
+# 完整发布流程
+npm run publish
+
+# 测试发布流程（不实际发布到VS Code市场）
+npm run publish:dry-run
+```
+
+### 发布工具功能
+
+发布工具会自动执行以下步骤：
+
+1. **代码质量检查**
+   - 运行代码 lint 检查
+   - 执行测试套件
+   - 确保工作区干净（无未提交更改）
+
+2. **构建项目**
+   - TypeScript 编译
+   - 生产环境打包
+   - 生成 sourcemap
+
+3. **版本管理**
+   - 自动更新 CHANGELOG.md
+   - 创建 Git 标签
+   - 提交版本更新
+
+4. **发布**
+   - 推送到远程仓库
+   - 发布到 VS Code 市场
+
+### 手动发布步骤
+
+如果你想手动发布，可以按以下步骤：
+
+1. **更新版本号**
+   ```bash
+   # 更新 package.json 中的版本号
+   npm version patch  # 或 minor, major
+   ```
+
+2. **更新 CHANGELOG**
+   - 在 CHANGELOG.md 中添加新版本条目
+   - 记录新功能、修复和改进
+
+3. **构建项目**
+   ```bash
+   npm run compile
+   npm run package
+   ```
+
+4. **创建 Git 标签**
+   ```bash
+   git tag -a v0.0.3 -m "发布版本 v0.0.3"
+   git push origin v0.0.3
+   ```
+
+5. **发布到 VS Code 市场**
+   ```bash
+   # 需要先安装 vsce
+   npm install -g vsce
+
+   # 发布
+   vsce publish
+   ```
+
+### 发布前检查清单
+
+- [ ] 代码通过所有测试
+- [ ] 更新了 CHANGELOG.md
+- [ ] 版本号符合语义化版本规范
+- [ ] 工作区没有未提交的更改
+- [ README.md 是最新的
+- [ ] 所有功能都已测试
+
 ## 开发
 
 ```bash
@@ -259,6 +340,9 @@ npm run watch
 
 # 运行测试
 npm test
+
+# 代码检查
+npm run lint
 ```
 
 ## 项目结构

@@ -3,6 +3,7 @@ import { ToolRegistry } from './tools';
 import { McpServer } from './server';
 import { StatusViewProvider, ToolsViewProvider, ConfigViewProvider, ChatViewProvider, HistoryViewProvider, copyServerInfo, openSettings } from './views';
 import { AgentClient } from './client';
+import { logger } from './utils/logger';
 
 let mcpServer: McpServer | null = null;
 let toolRegistry: ToolRegistry | null = null;
@@ -18,7 +19,7 @@ let chatViewProvider: ChatViewProvider | null = null;
  * 扩展激活入口
  */
 export function activate(context: vscode.ExtensionContext) {
-    console.log('AIAT 扩展已激活');
+    logger.info('AIAT 扩展已激活');
 
     // 创建输出通道
     outputChannel = vscode.window.createOutputChannel('AIAT');
@@ -133,7 +134,7 @@ export function activate(context: vscode.ExtensionContext) {
                         const state = agentClient.state;
                         const runId = agentClient.currentRunId;
                         const taskState = agentClient.taskState;
-                        console.log('[Extension] Force sync chat view after connect - state:', state, 'runId:', runId, 'taskState:', taskState);
+                        logger.debug('Force sync chat view after connect', { state, runId, taskState });
                         chatViewProvider.updateConnectionState(state, runId, taskState);
 
                         // 再次确保状态同步
@@ -172,7 +173,7 @@ export function activate(context: vscode.ExtensionContext) {
                 if (chatViewProvider && agentClient) {
                     const state = agentClient.state;
                     const taskState = agentClient.taskState;
-                    console.log('[Extension] Force sync chat view after disconnect - state:', state, 'taskState:', taskState);
+                    logger.debug('Force sync chat view after disconnect', { state, taskState });
                     chatViewProvider.updateConnectionState(state, null, taskState);
 
                     // 再次确保状态同步
@@ -242,13 +243,7 @@ export function activate(context: vscode.ExtensionContext) {
     const debugStateCmd = vscode.commands.registerCommand('aiat.debugState', () => {
         if (agentClient) {
             const stateSummary = agentClient.stateManager.getStateSummary();
-            console.log('=== Agent Client State Debug ===');
-            console.log(JSON.stringify(stateSummary, null, 2));
-            console.log('=== Message History ===');
-            console.log(`Total messages: ${agentClient.messages.length}`);
-            agentClient.messages.slice(-5).forEach((msg, index) => {
-                console.log(`[${index}] ${msg.direction} - ${msg.type}: ${msg.content?.substring(0, 100)}...`);
-            });
+            logger.info('Agent Client State Debug', stateSummary);
 
             // 显示状态信息
             const stateInfo = [
@@ -344,8 +339,6 @@ function updateStatusView(): void {
         const taskState = agentClient.taskState;
         const runId = agentClient.stateManager.state.runId;
 
-        console.log(`[Extension] Forcing connection state update: ${connectionState}, task: ${taskState}, runId: ${runId}`);
-
         // 找到活动聊天视图并更新状态
         chatViewProvider?.updateConnectionState(connectionState, runId, taskState);
     }
@@ -355,7 +348,7 @@ function updateStatusView(): void {
  * 扩展停用
  */
 export async function deactivate(): Promise<void> {
-    console.log('AIAT 扩展正在停用...');
+    logger.info('AIAT 扩展正在停用...');
 
     try {
         // 断开智能体连接
@@ -363,7 +356,7 @@ export async function deactivate(): Promise<void> {
             try {
                 agentClient.dispose();
             } catch (error) {
-                console.warn('Error disposing agent client:', error);
+                logger.warn('Error disposing agent client', error);
             }
             agentClient = null;
         }
@@ -373,7 +366,7 @@ export async function deactivate(): Promise<void> {
             try {
                 await mcpServer.stop();
             } catch (error) {
-                console.warn('Error stopping MCP server:', error);
+                logger.warn('Error stopping MCP server', error);
             }
             mcpServer = null;
         }
@@ -383,13 +376,13 @@ export async function deactivate(): Promise<void> {
             try {
                 outputChannel.dispose();
             } catch (error) {
-                console.warn('Error disposing output channel:', error);
+                logger.warn('Error disposing output channel', error);
             }
             outputChannel = null;
         }
 
-        console.log('AIAT 扩展已停用');
+        logger.info('AIAT 扩展已停用');
     } catch (error) {
-        console.warn('Error during extension deactivation:', error);
+        logger.error('Error during extension deactivation', error);
     }
 }
