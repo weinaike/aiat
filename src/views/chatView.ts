@@ -869,9 +869,29 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
             case 'completion':
                 // 任务完成消息，根据状态决定是否显示
-                const completionData = message.data as { status?: string };
+                const completionData = message.data as { status?: string; task_result?: any };
                 if (completionData.status === 'cancelled') {
                     return null; // 取消的任务不显示消息
+                }
+                // 如果是错误状态，显示错误消息
+                if (completionData.status === 'error') {
+                    const taskResult = completionData.task_result;
+                    if (taskResult && taskResult.messages && taskResult.messages.length > 0) {
+                        // 提取错误消息内容
+                        const errorMessages = taskResult.messages
+                            .map((msg: any) => msg.content)
+                            .filter((content: string) => content)
+                            .join('\n');
+                        if (errorMessages) {
+                            displayContent = errorMessages;
+                            messageType = '任务错误';
+                            break;
+                        }
+                    }
+                    // 如果没有具体错误消息，使用默认内容
+                    displayContent = message.content || '任务执行失败';
+                    messageType = '任务错误';
+                    break;
                 }
                 // 其他状态的completion消息不显示
                 return null;
