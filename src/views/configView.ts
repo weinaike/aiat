@@ -33,18 +33,12 @@ export class ConfigViewProvider implements vscode.TreeDataProvider<ConfigItem> {
         const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || '未知项目';
 
         return [
-            new ConfigItem('🖥️ 服务器配置', '', 'header', '$(gear)'),
-            new ConfigItem('智能体服务', agentServerUrl, 'agent_server', '$(cloud)'),
-            new ConfigItem('MCP 隧道', mcpTunnelEnabled ? '已启用' : '已禁用', 'mcp_tunnel', mcpTunnelEnabled ? '$(check)' : '$(close)'),
-            new ConfigItem('', '', 'divider', ''),
-            new ConfigItem('📁 工作区信息', '', 'header', '$(folder)'),
-            new ConfigItem('工作区名称', workspaceName, 'workspace_name', '$(project)'),
-            new ConfigItem('代码库路径', workspaceRoot || '(未打开)', 'codebase', '$(folder-opened)'),
-            new ConfigItem('', '', 'divider', ''),
-            new ConfigItem('📋 复制配置', '', 'copy', '$(copy)', {
-                command: 'aiat.copyServerInfo',
-                title: '复制 team_config'
-            })
+            // 服务器配置组
+            new ConfigItem('智能体服务', agentServerUrl, 'agent_server', 'cloud'),
+            new ConfigItem('MCP 隧道', mcpTunnelEnabled ? '已启用' : '已禁用', 'mcp_tunnel', mcpTunnelEnabled ? 'check' : 'close'),
+            // 工作区信息组
+            new ConfigItem('工作区名称', workspaceName, 'workspace_name', 'project'),
+            new ConfigItem('代码库路径', workspaceRoot || '(未打开)', 'codebase', 'folder-opened'),
         ];
     }
 
