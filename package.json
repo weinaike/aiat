@@ -4,6 +4,10 @@
   "description": "AI Agent Toolkit - AgentFlow 智能体服务客户端",
   "version": "0.0.6",
   "publisher": "weinaike",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/weinaike/aiat.git"
+  },
   "engines": {
     "vscode": "^1.74.0"
   },
