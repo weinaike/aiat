@@ -24,10 +24,10 @@ export class StatusViewProvider implements vscode.TreeDataProvider<StatusItem> {
             return [new StatusItem('未初始化', '', vscode.TreeItemCollapsibleState.None)];
         }
 
-        return [
+        const items: StatusItem[] = [
             new StatusItem(
-                '服务状态',
-                this.status.running ? '运行中 ✅' : '已停止 ⏹️',
+                'MCP 隧道',
+                this.status.running ? '已连接 ✅' : '未连接 ⏹️',
                 vscode.TreeItemCollapsibleState.None
             ),
             new StatusItem(
@@ -36,21 +36,13 @@ export class StatusViewProvider implements vscode.TreeDataProvider<StatusItem> {
                 vscode.TreeItemCollapsibleState.None
             ),
             new StatusItem(
-                '监听端口',
-                String(this.status.port),
-                vscode.TreeItemCollapsibleState.None
-            ),
-            new StatusItem(
-                '连接客户端',
-                String(this.status.connectedClients),
-                vscode.TreeItemCollapsibleState.None
-            ),
-            new StatusItem(
                 '可用工具数',
                 String(this.status.tools.length),
                 vscode.TreeItemCollapsibleState.None
             )
         ];
+
+        return items;
     }
 }
 

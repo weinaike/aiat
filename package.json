@@ -25,16 +25,6 @@
   "contributes": {
     "commands": [
       {
-        "command": "aiat.startServer",
-        "title": "AIAT: 启动工具服务器",
-        "icon": "$(play)"
-      },
-      {
-        "command": "aiat.stopServer",
-        "title": "AIAT: 停止工具服务器",
-        "icon": "$(debug-stop)"
-      },
-      {
         "command": "aiat.showStatus",
         "title": "AIAT: 显示服务状态"
       },
@@ -90,17 +80,11 @@
     "configuration": {
       "title": "AIAT",
       "properties": {
-        "aiat.serverPort": {
-          "type": "number",
-          "default": 9527,
-          "description": "MCP 工具服务器监听端口",
-          "order": 1
-        },
-        "aiat.autoStart": {
+        "aiat.mcpTunnel.enabled": {
           "type": "boolean",
-          "default": false,
-          "description": "扩展激活时自动启动服务器",
-          "order": 2
+          "default": true,
+          "description": "启用 MCP 隧道模式，通过公网服务器中转 MCP 请求，无需开放本地端口。",
+          "order": 1
         },
         "aiat.enableFileOperations": {
           "type": "boolean",
@@ -117,28 +101,23 @@
           "default": true,
           "description": "启用终端操作工具"
         },
-        "aiat.authToken": {
-          "type": "string",
-          "default": "",
-          "description": "认证令牌（可选，用于验证后端智能体请求）"
-        },
         "aiat.agentServer.url": {
           "type": "string",
           "default": "ws://agent-flow.dev.csst.lab.zverse.space:32080",
           "description": "后端智能体服务地址（WebSocket）",
-          "order": 3
+          "order": 2
         },
         "aiat.agentServer.autoConnect": {
           "type": "boolean",
           "default": true,
           "description": "扩展激活时自动连接智能体服务",
-          "order": 4
+          "order": 3
         },
         "aiat.logging.enableDebugLogging": {
           "type": "boolean",
           "default": false,
           "description": "启用调试模式下的详细日志输出",
-          "order": 5
+          "order": 10
         }
       }
     },
@@ -178,16 +157,6 @@
     },
     "menus": {
       "view/title": [
-        {
-          "command": "aiat.startServer",
-          "when": "view == aiat.status",
-          "group": "navigation"
-        },
-        {
-          "command": "aiat.stopServer",
-          "when": "view == aiat.status",
-          "group": "navigation"
-        },
         {
           "command": "aiat.openSettings",
           "when": "view == aiat.config",

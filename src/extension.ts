@@ -1,11 +1,9 @@
 import * as vscode from 'vscode';
 import { ToolRegistry } from './tools';
-import { McpServer } from './server';
 import { StatusViewProvider, ToolsViewProvider, ConfigViewProvider, ChatViewProvider, HistoryViewProvider, copyServerInfo, openSettings } from './views';
 import { AgentClient } from './client';
 import { logger } from './utils/logger';
 
-let mcpServer: McpServer | null = null;
 let toolRegistry: ToolRegistry | null = null;
 let agentClient: AgentClient | null = null;
 let outputChannel: vscode.OutputChannel | null = null;
@@ -27,11 +25,19 @@ export function activate(context: vscode.ExtensionContext) {
     // 创建工具注册表
     toolRegistry = new ToolRegistry();
     
-    // 创建 MCP 服务器
-    mcpServer = new McpServer(toolRegistry, outputChannel);
+    // MCP 工具通过 WebSocket 隧道提供，不再需要本地 HTTP MCP 服务器
+    outputChannel.appendLine('使用 MCP 隧道模式提供工具服务');
 
-    // 创建 WebSocket 客户端
+    // 创建 WebSocket 客户端（集成了 MCP 隧道功能）
     agentClient = new AgentClient(outputChannel, context);
+    // 设置工具注册表，用于 MCP 隧道功能
+    agentClient.setToolRegistry(toolRegistry);
+
+    // 监听连接状态变化，自动更新视图
+    agentClient.onStateChange(() => {
+        updateStatusView();
+        configViewProvider?.refresh();
+    });
 
     // 创建视图提供器
     statusViewProvider = new StatusViewProvider();
@@ -54,54 +60,24 @@ export function activate(context: vscode.ExtensionContext) {
     // 更新工具列表视图
     toolsViewProvider.updateTools(toolRegistry.getToolDefinitions());
 
-    // 注册命令：启动服务器
-    const startServerCmd = vscode.commands.registerCommand('aiat.startServer', async () => {
-        try {
-            await mcpServer?.start();
-            // 无论启动成功还是发现已在运行，都要更新状态视图
-            updateStatusView();
-            configViewProvider?.refresh();
-        } catch (error: any) {
-            const message = error instanceof Error ? error.message : String(error);
-
-            // 特殊处理端口占用错误
-            if (message.includes('已被占用') || error?.code === 'EADDRINUSE') {
-                // 端口占用错误已经在服务器级别处理了，这里只记录日志
-                outputChannel?.appendLine(`[启动服务器] ${message}`);
-                // 即使端口被占用，也要更新状态视图，因为可能有服务器在运行
-                updateStatusView();
-                configViewProvider?.refresh();
-                return; // 不显示错误消息，因为已经在服务器级别处理了
-            }
-
-            vscode.window.showErrorMessage(`启动 MCP 服务器失败: ${message}`);
-        }
-    });
-
-    // 注册命令：停止服务器
-    const stopServerCmd = vscode.commands.registerCommand('aiat.stopServer', async () => {
-        try {
-            await mcpServer?.stop();
-            updateStatusView();
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            vscode.window.showErrorMessage(`停止 MCP 服务器失败: ${message}`);
-        }
-    });
-
-    // 注册命令：显示状态
+    // 注册命令：显示状态（显示 MCP 隧道状态）
     const showStatusCmd = vscode.commands.registerCommand('aiat.showStatus', () => {
-        const status = mcpServer?.getStatus();
-        if (status) {
+        if (agentClient) {
+            const isConnected = agentClient.state === 'connected';
+            const mcpReady = agentClient.mcpInitialized;
+            const runId = agentClient.currentRunId;
+            const tools = toolRegistry?.getToolNames() || [];
+            
             const statusText = [
-                `服务状态: ${status.running ? '运行中' : '已停止'}`,
-                `协议: MCP (${status.protocolVersion})`,
-                `监听端口: ${status.port}`,
-                `连接客户端: ${status.connectedClients}`,
-                `可用工具: ${status.tools.length} 个`
+                `连接状态: ${isConnected ? '已连接' : '未连接'}`,
+                `MCP 隧道: ${mcpReady ? '就绪' : '未就绪'}`,
+                `当前 Run ID: ${runId || '无'}`,
+                `可用工具: ${tools.length} 个`
             ].join('\n');
             
             vscode.window.showInformationMessage(statusText, { modal: true });
+        } else {
+            vscode.window.showInformationMessage('智能体客户端未初始化');
         }
     });
 
@@ -121,7 +97,8 @@ export function activate(context: vscode.ExtensionContext) {
     const connectAgentCmd = vscode.commands.registerCommand('aiat.connectAgent', async () => {
         try {
             if (agentClient) {
-                await agentClient.connect(true); // 自动启动 MCP 服务器
+                await agentClient.connect(true); // 自动启动 MCP 服务器（如果启用）
+                // MCP 隧道功能已集成到 agentClient 中，连接时会自动发送 mcp_register 消息
 
                 // 使用短延迟确保连接状态已完全更新
                 setTimeout(() => {
@@ -162,6 +139,7 @@ export function activate(context: vscode.ExtensionContext) {
     const disconnectAgentCmd = vscode.commands.registerCommand('aiat.disconnectAgent', () => {
         if (agentClient) {
             agentClient.disconnect();
+            // MCP 隧道会随 WebSocket 连接一起断开
 
             // 使用短延迟确保断开状态已完全更新
             setTimeout(() => {
@@ -274,8 +252,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 添加到订阅列表
     context.subscriptions.push(
-        startServerCmd,
-        stopServerCmd,
         showStatusCmd,
         openSettingsCmd,
         copyServerInfoCmd,
@@ -295,13 +271,7 @@ export function activate(context: vscode.ExtensionContext) {
     // 初始更新状态视图
     updateStatusView();
 
-    // 自动启动服务器（可选）
-    const autoStart = vscode.workspace.getConfiguration('aiat').get('autoStart', false);
-    if (autoStart) {
-        mcpServer.start().catch(err => {
-            outputChannel?.appendLine(`自动启动失败: ${err.message}`);
-        });
-    }
+    // MCP 隧道会在连接智能体服务时自动建立，不再需要单独启动本地服务器
 
     // 自动连接智能体服务（增强用户体验）
     const autoConnect = vscode.workspace.getConfiguration('aiat').get('agentServer.autoConnect', false);
@@ -311,10 +281,16 @@ export function activate(context: vscode.ExtensionContext) {
             try {
                 await agentClient?.connect(true); // 自动连接并启动 MCP 服务器
                 outputChannel?.appendLine('已自动连接到智能体服务');
+                
+                // 自动连接成功后更新状态视图
+                updateStatusView();
+                configViewProvider?.refresh();
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 outputChannel?.appendLine(`自动连接失败: ${message}`);
                 // 静默失败，不显示错误通知，避免干扰用户体验
+                // 即使失败也更新状态视图
+                updateStatusView();
             }
         }, 1000);
     }
@@ -328,16 +304,26 @@ export function activate(context: vscode.ExtensionContext) {
  * 更新状态视图
  */
 function updateStatusView(): void {
-    if (statusViewProvider && mcpServer) {
-        statusViewProvider.updateStatus(mcpServer.getStatus());
-    }
-
-    // 同时更新连接状态到聊天视图
+    // 更新连接状态到聊天视图
     if (agentClient) {
         // 触发聊天视图中的状态更新
         const connectionState = agentClient.state;
         const taskState = agentClient.taskState;
         const runId = agentClient.stateManager.state.runId;
+
+        // 更新状态视图（使用 MCP 隧道状态）
+        if (statusViewProvider && toolRegistry) {
+            const isConnected = connectionState === 'connected';
+            const mcpReady = agentClient.mcpInitialized;
+            statusViewProvider.updateStatus({
+                running: isConnected && mcpReady,
+                port: 0, // MCP 隧道不使用本地端口
+                connectedClients: isConnected ? 1 : 0,
+                tools: toolRegistry.getToolNames(),
+                protocol: 'mcp-tunnel',
+                protocolVersion: '2024-11-05'
+            });
+        }
 
         // 找到活动聊天视图并更新状态
         chatViewProvider?.updateConnectionState(connectionState, runId, taskState);
@@ -351,7 +337,7 @@ export async function deactivate(): Promise<void> {
     logger.info('AIAT 扩展正在停用...');
 
     try {
-        // 断开智能体连接
+        // 断开智能体连接（MCP 隧道功能已集成其中）
         if (agentClient) {
             try {
                 agentClient.dispose();
@@ -361,15 +347,7 @@ export async function deactivate(): Promise<void> {
             agentClient = null;
         }
 
-        // 停止 MCP 服务器
-        if (mcpServer) {
-            try {
-                await mcpServer.stop();
-            } catch (error) {
-                logger.warn('Error stopping MCP server', error);
-            }
-            mcpServer = null;
-        }
+        // MCP 隧道会随 agentClient 一起销毁，不需要单独停止
 
         // 清理输出通道
         if (outputChannel) {

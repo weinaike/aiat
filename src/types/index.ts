@@ -162,7 +162,7 @@ export interface ServerStatus {
     port: number;
     connectedClients: number;
     tools: string[];
-    protocol: 'mcp';
+    protocol: 'mcp' | 'mcp-tunnel';
     protocolVersion: string;
 }
 

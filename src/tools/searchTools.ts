@@ -263,14 +263,12 @@ export class GetEnvironmentTool extends BaseTool {
         // 获取配置信息
         const config = vscode.workspace.getConfiguration();
         const aiatConfig = {
-            serverPort: config.get('aiat.serverPort'),
-            autoStart: config.get('aiat.autoStart'),
-            authToken: config.get('aiat.authToken'),
             enableFileOperations: config.get('aiat.enableFileOperations'),
             enableCodeSearch: config.get('aiat.enableCodeSearch'),
             enableTerminal: config.get('aiat.enableTerminal'),
             agentServer: config.get('aiat.agentServer.url'),
-            autoConnect: config.get('aiat.agentServer.autoConnect')
+            autoConnect: config.get('aiat.agentServer.autoConnect'),
+            mcpTunnelEnabled: config.get('aiat.mcpTunnel.enabled')
         };
 
         // 获取扩展信息

@@ -1,31 +1,11 @@
 import * as vscode from 'vscode';
-import * as os from 'os';
 
 /**
- * 获取本机 IP 地址
- */
-function getLocalIP(): string {
-    const interfaces = os.networkInterfaces();
-    for (const name of Object.keys(interfaces)) {
-        for (const iface of interfaces[name] || []) {
-            // 跳过内部地址和非 IPv4 地址
-            if (iface.family === 'IPv4' && !iface.internal) {
-                return iface.address;
-            }
-        }
-    }
-    return '127.0.0.1';
-}
-
-/**
- * 团队配置接口
+ * 团队配置接口（简化版，不再包含本地 MCP 服务器信息）
  */
 export interface TeamConfig {
     id: number;
     codebase: string;
-    mcp_server: string;
-    mcp_port: number;
-    mcp_token?: string;
 }
 
 /**
@@ -45,9 +25,8 @@ export class ConfigViewProvider implements vscode.TreeDataProvider<ConfigItem> {
 
     getChildren(): ConfigItem[] {
         const config = vscode.workspace.getConfiguration('aiat');
-        const port = config.get<number>('serverPort', 9527);
-        const authToken = config.get<string>('authToken', '');
-        const localIP = getLocalIP();
+        const agentServerUrl = config.get<string>('agentServer.url', 'ws://agent-flow.dev.csst.lab.zverse.space:32080');
+        const mcpTunnelEnabled = config.get<boolean>('mcpTunnel.enabled', true);
         const workspaceRoot = this.getDefaultCodebase();
 
         // 获取workspace名称
@@ -55,9 +34,8 @@ export class ConfigViewProvider implements vscode.TreeDataProvider<ConfigItem> {
 
         return [
             new ConfigItem('🖥️ 服务器配置', '', 'header', '$(gear)'),
-            new ConfigItem('服务器地址', localIP, 'mcp_server', '$(globe)'),
-            new ConfigItem('服务器端口', String(port), 'mcp_port', '$(plug)'),
-            new ConfigItem('认证状态', authToken ? '已配置' : '未配置', 'auth_status', authToken ? '$(verified)' : '$(warning)'),
+            new ConfigItem('智能体服务', agentServerUrl, 'agent_server', '$(cloud)'),
+            new ConfigItem('MCP 隧道', mcpTunnelEnabled ? '已启用' : '已禁用', 'mcp_tunnel', mcpTunnelEnabled ? '$(check)' : '$(close)'),
             new ConfigItem('', '', 'divider', ''),
             new ConfigItem('📁 工作区信息', '', 'header', '$(folder)'),
             new ConfigItem('工作区名称', workspaceName, 'workspace_name', '$(project)'),
@@ -76,26 +54,17 @@ export class ConfigViewProvider implements vscode.TreeDataProvider<ConfigItem> {
     }
 
     /**
-     * 获取当前 team_config
+     * 获取当前 team_config（简化版，MCP 工具通过隧道提供）
      */
     getTeamConfig(): TeamConfig {
         const config = vscode.workspace.getConfiguration('aiat');
-        const port = config.get<number>('serverPort', 9527);
         const teamId = config.get<number>('teamConfig.id', 1);
         const codebase = config.get<string>('teamConfig.codebase', '') || this.getDefaultCodebase();
-        const authToken = config.get<string>('authToken', '');
-        const localIP = getLocalIP();
 
         const teamConfig: TeamConfig = {
             id: teamId,
-            codebase: codebase,
-            mcp_server: localIP,
-            mcp_port: port
+            codebase: codebase
         };
-
-        if (authToken) {
-            teamConfig.mcp_token = authToken;
-        }
 
         return teamConfig;
     }

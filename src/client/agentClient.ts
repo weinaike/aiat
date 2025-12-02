@@ -4,6 +4,23 @@ import { StateManager, ConnectionState, TaskState } from './stateManager';
 import { errorHandler, ErrorType, ErrorSeverity } from '../utils/errorHandler';
 import { MessageStorage } from '../utils/messageStorage';
 import { logger } from '../utils/logger';
+import { ToolRegistry } from '../tools';
+import {
+    JsonRpcRequest,
+    JsonRpcResponse,
+    McpInitializeParams,
+    McpInitializeResult,
+    McpServerCapabilities,
+    McpTool,
+    McpToolCallParams,
+    McpToolCallResult,
+    McpContent,
+    McpErrorCodes
+} from '../types';
+
+const MCP_PROTOCOL_VERSION = '2024-11-05';
+const MCP_SERVER_NAME = 'vscode-aiat';
+const MCP_SERVER_VERSION = '1.0.0';
 
 /**
  * 消息类型
@@ -27,6 +44,7 @@ export interface HistoryLoadedEvent {
 
 /**
  * AgentFlow WebSocket 客户端
+ * 同时支持智能体通信和 MCP 工具隧道
  */
 export class AgentClient {
     private ws: WebSocket | null = null;
@@ -36,6 +54,10 @@ export class AgentClient {
     private reconnectAttempts = 0;
     private maxReconnectAttempts = 5;
     private reconnectDelay = 1000; // 初始重连延迟1秒
+
+    // MCP 隧道相关
+    private _toolRegistry: ToolRegistry | null = null;
+    private _mcpInitialized: boolean = false;
 
     private _stateManager = new StateManager();
     private _messages: AgentMessage[] = [];
@@ -72,6 +94,21 @@ export class AgentClient {
         errorHandler.addErrorListener((error) => {
             this.handleExtendedError(error);
         });
+    }
+
+    /**
+     * 设置工具注册表（用于 MCP 隧道功能）
+     */
+    setToolRegistry(toolRegistry: ToolRegistry): void {
+        this._toolRegistry = toolRegistry;
+        this.log(`工具注册表已设置，工具数量: ${toolRegistry.getToolNames().length}`);
+    }
+
+    /**
+     * 获取 MCP 初始化状态
+     */
+    get mcpInitialized(): boolean {
+        return this._mcpInitialized;
     }
 
     /**
@@ -204,26 +241,19 @@ export class AgentClient {
      */
     private getTeamConfig(agentId: number): object {
         const config = vscode.workspace.getConfiguration('aiat');
-        const port = config.get<number>('serverPort', 9527);
         const teamId = agentId; // agentId is now required, no fallback to config
 
         // 始终使用workspace根目录作为codebase
         const codebase = this.getDefaultCodebase();
 
-        const authToken = config.get<string>('authToken', '');
-
         const teamConfig: Record<string, unknown> = {
             id: teamId,
             codebase: codebase,
             flow_id: null,
-            node_id: [],
-            mcp_server: this.getLocalIP(),
-            mcp_port: port
+            node_id: []
         };
 
-        if (authToken) {
-            teamConfig.mcp_token = authToken;
-        }
+        // MCP 工具现在通过 WebSocket 隧道提供，不再需要发送本地服务器信息
 
         return teamConfig;
     }
@@ -233,19 +263,6 @@ export class AgentClient {
         const codebase = workspaceFolder?.uri.fsPath || '';
         logger.debug('getDefaultCodebase', { workspaceFolder, codebase });
         return codebase;
-    }
-
-    private getLocalIP(): string {
-        const os = require('os');
-        const interfaces = os.networkInterfaces();
-        for (const name of Object.keys(interfaces)) {
-            for (const iface of interfaces[name] || []) {
-                if (iface.family === 'IPv4' && !iface.internal) {
-                    return iface.address;
-                }
-            }
-        }
-        return '127.0.0.1';
     }
 
     /**
@@ -396,7 +413,12 @@ export class AgentClient {
 
                 vscode.window.showInformationMessage(`已连接到智能体服务 (Run ID: ${this.currentRunId})`);
 
-                // 连接成功后自动启动 MCP 服务器
+                // 如果有工具注册表，发送 MCP 注册消息（集成的 MCP 隧道）
+                if (this._toolRegistry) {
+                    this.sendMcpRegistration();
+                }
+
+                // 连接成功后自动启动 MCP 服务器（如果需要本地服务器）
                 if (autoStartMcpServer) {
                     this.log('连接成功，准备启动 MCP 服务器');
                     vscode.commands.executeCommand('aiat.startServer');
@@ -734,6 +756,17 @@ export class AgentClient {
             return;
         }
 
+        // 处理 MCP 隧道相关消息
+        if (messageType === 'mcp_request') {
+            this.handleMcpRequest(messageData as { id?: string; request?: JsonRpcRequest });
+            return;
+        }
+
+        if (messageType === 'mcp_initialized') {
+            this.handleMcpInitialized(messageData as { status?: string; message?: string; tools?: string[] });
+            return;
+        }
+
         let content: string | undefined;
 
         // 根据消息类型处理内容
@@ -1038,6 +1071,275 @@ export class AgentClient {
     private log(message: string): void {
         const timestamp = new Date().toISOString();
         this.outputChannel.appendLine(`[${timestamp}] [AgentClient] ${message}`);
+    }
+
+    // ==================== MCP 隧道相关方法 ====================
+
+    /**
+     * 发送 MCP 相关消息（不记录到消息历史）
+     */
+    private send(data: object): boolean {
+        if (!this._stateManager.isConnected || !this.ws) {
+            this.log('未连接，无法发送 MCP 消息');
+            return false;
+        }
+
+        try {
+            const message = JSON.stringify(data);
+            this.ws.send(message);
+            return true;
+        } catch (error) {
+            this.log(`发送 MCP 消息失败: ${error instanceof Error ? error.message : String(error)}`);
+            return false;
+        }
+    }
+
+    /**
+     * 发送 MCP 注册消息（在 WebSocket 连接中注册 MCP 能力）
+     */
+    private sendMcpRegistration(): void {
+        if (!this._toolRegistry || !this.ws) {
+            return;
+        }
+
+        const tools = this._toolRegistry.getToolNames();
+        const registration = {
+            type: 'mcp_register',
+            serverInfo: {
+                name: MCP_SERVER_NAME,
+                version: MCP_SERVER_VERSION,
+                protocolVersion: MCP_PROTOCOL_VERSION
+            },
+            capabilities: {
+                tools: tools,
+                toolCount: tools.length
+            }
+        };
+
+        this.send(registration);
+        this.log(`已发送 MCP 注册信息，工具数量: ${tools.length}`);
+    }
+
+    /**
+     * 处理 MCP 初始化完成消息
+     */
+    private handleMcpInitialized(message: { status?: string; message?: string; tools?: string[] }): void {
+        const previousState = this._mcpInitialized;
+        
+        if (message.status === 'success') {
+            this._mcpInitialized = true;
+            this.log(`MCP 隧道初始化成功: ${message.message}`);
+            if (message.tools) {
+                this.log(`已注册工具: ${message.tools.join(', ')}`);
+            }
+        } else {
+            this._mcpInitialized = false;
+            this.log(`MCP 隧道初始化失败: ${message.message}`);
+        }
+       
+        this._onStateChange.fire(this._stateManager.connectionState);
+        
+    }
+
+    /**
+     * 处理后端发来的 MCP 请求
+     */
+    private async handleMcpRequest(message: { id?: string; request?: JsonRpcRequest }): Promise<void> {
+        if (!message.request || !message.id) {
+            this.log('收到无效的 MCP 请求（缺少 request 或 id）');
+            return;
+        }
+
+        const { request, id: requestId } = message;
+        this.log(`处理 MCP 请求: ${request.method} (id: ${requestId})`);
+
+        try {
+            const response = await this.processMcpRequest(request);
+            this.send({
+                type: 'mcp_response',
+                requestId: requestId,
+                response: response
+            });
+        } catch (error) {
+            const err = error as { code?: number; message?: string };
+            this.send({
+                type: 'mcp_response',
+                requestId: requestId,
+                response: {
+                    jsonrpc: '2.0',
+                    id: request.id,
+                    error: {
+                        code: err.code || McpErrorCodes.INTERNAL_ERROR,
+                        message: err.message || 'Internal error'
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * 处理 MCP JSON-RPC 请求
+     */
+    private async processMcpRequest(request: JsonRpcRequest): Promise<JsonRpcResponse> {
+        const { method, params, id } = request;
+
+        try {
+            const result = await this.dispatchMcpMethod(method, params);
+            return {
+                jsonrpc: '2.0',
+                id: id,
+                result: result
+            };
+        } catch (error) {
+            const err = error as { code?: number; message?: string };
+            return {
+                jsonrpc: '2.0',
+                id: id,
+                error: {
+                    code: err.code || McpErrorCodes.INTERNAL_ERROR,
+                    message: err.message || 'Internal error'
+                }
+            };
+        }
+    }
+
+    /**
+     * 分发 MCP 方法调用
+     */
+    private async dispatchMcpMethod(method: string, params: unknown): Promise<unknown> {
+        switch (method) {
+            case 'initialize':
+                return this.handleMcpInitialize(params as McpInitializeParams);
+            
+            case 'initialized':
+                this._mcpInitialized = true;
+                return {};
+            
+            case 'ping':
+                return {};
+
+            case 'tools/list':
+                return this.handleMcpToolsList();
+            
+            case 'tools/call':
+                return this.handleMcpToolCall(params as McpToolCallParams);
+
+            default: {
+                const error = new Error(`Method not found: ${method}`);
+                (error as any).code = McpErrorCodes.METHOD_NOT_FOUND;
+                throw error;
+            }
+        }
+    }
+
+    /**
+     * 处理 MCP initialize 请求
+     */
+    private handleMcpInitialize(params: McpInitializeParams): McpInitializeResult {
+        this.log(`MCP 客户端初始化: ${params.clientInfo?.name} v${params.clientInfo?.version}`);
+
+        const capabilities: McpServerCapabilities = {
+            tools: { listChanged: true },
+            resources: { subscribe: false, listChanged: false },
+            logging: {}
+        };
+
+        return {
+            protocolVersion: MCP_PROTOCOL_VERSION,
+            capabilities,
+            serverInfo: {
+                name: MCP_SERVER_NAME,
+                version: MCP_SERVER_VERSION
+            },
+            instructions: '这是一个 VS Code AIAT 服务器，通过隧道提供文件操作、代码搜索和终端操作等工具。'
+        };
+    }
+
+    /**
+     * 处理 MCP tools/list 请求
+     */
+    private handleMcpToolsList(): { tools: McpTool[] } {
+        if (!this._toolRegistry) {
+            return { tools: [] };
+        }
+
+        const toolDefinitions = this._toolRegistry.getToolDefinitions();
+        const tools: McpTool[] = toolDefinitions.map(tool => {
+            const properties: Record<string, { type: string; description: string; default?: unknown; enum?: string[] }> = {};
+            
+            for (const [key, prop] of Object.entries(tool.inputSchema.properties)) {
+                properties[key] = {
+                    type: prop.type,
+                    description: prop.description
+                };
+                if (prop.default !== undefined) {
+                    properties[key].default = prop.default;
+                }
+                if (prop.enum) {
+                    properties[key].enum = prop.enum;
+                }
+            }
+
+            return {
+                name: tool.name,
+                description: tool.description,
+                inputSchema: {
+                    type: 'object' as const,
+                    properties,
+                    required: tool.inputSchema.required || []
+                }
+            };
+        });
+
+        this.log(`返回工具列表: ${tools.length} 个工具`);
+        return { tools };
+    }
+
+    /**
+     * 处理 MCP tools/call 请求
+     */
+    private async handleMcpToolCall(params: McpToolCallParams): Promise<McpToolCallResult> {
+        if (!this._toolRegistry) {
+            return {
+                content: [{ type: 'text', text: 'Error: Tool registry not initialized' }],
+                isError: true
+            };
+        }
+
+        const { name, arguments: args = {} } = params;
+
+        this.log(`调用工具: ${name}`);
+
+        const tool = this._toolRegistry.get(name);
+        if (!tool) {
+            const error = new Error(`Tool not found: ${name}`);
+            (error as any).code = McpErrorCodes.TOOL_NOT_FOUND;
+            throw error;
+        }
+
+        try {
+            const result = await tool.execute(args);
+            
+            const content: McpContent[] = [{
+                type: 'text',
+                text: typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+            }];
+
+            this.log(`工具 ${name} 执行成功`);
+            return { content, isError: false };
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.log(`工具 ${name} 执行失败: ${errorMessage}`);
+            
+            return {
+                content: [{
+                    type: 'text',
+                    text: `Error: ${errorMessage}`
+                }],
+                isError: true
+            };
+        }
     }
 
     /**
