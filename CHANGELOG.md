@@ -4,6 +4,28 @@ All notable changes to the "AIAT" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.7] - 2025-12-03
+
+### 新增功能
+
+- **外部 MCP 服务器集成** - 支持集成第三方 MCP 工具服务器（如 DesktopCommanderMCP）
+- **工具来源配置** - 新增 `aiat.toolSource` 配置项，支持三种模式：
+  - `local` - 使用插件内置的轻量工具（11个，默认）
+  - `builtin-mcp` - 使用内置的 DesktopCommanderMCP（功能更强大，25个工具）
+  - `none` - 不启用内置工具，仅使用自定义 MCP 服务器
+- **自定义 MCP 服务器** - 新增 `aiat.mcpServers.custom` 配置项，支持配置多个外部 MCP 服务器
+
+### 改进
+
+- 工具来源可在运行时动态切换，无需重启插件
+- 内置 MCP 工具不再添加前缀，工具名称更简洁
+- 简化日志系统，调试日志始终输出到 AIAT Debug 面板
+
+### 移除
+
+- 移除 `aiat.mcpTunnel.enabled` 配置项（MCP 隧道现为必需功能）
+- 移除 `aiat.logging.enableDebugLogging` 配置项
+
 ## [0.0.6] - 2025-12-02
 
 更新文档

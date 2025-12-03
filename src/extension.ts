@@ -3,6 +3,7 @@ import { ToolRegistry } from './tools';
 import { StatusViewProvider, ToolsViewProvider, ConfigViewProvider, ChatViewProvider, HistoryViewProvider, copyServerInfo, openSettings } from './views';
 import { AgentClient } from './client';
 import { logger } from './utils/logger';
+import { McpServerManager } from './mcp';
 
 let toolRegistry: ToolRegistry | null = null;
 let agentClient: AgentClient | null = null;
@@ -12,6 +13,7 @@ let toolsViewProvider: ToolsViewProvider | null = null;
 let configViewProvider: ConfigViewProvider | null = null;
 let historyViewProvider: HistoryViewProvider | null = null;
 let chatViewProvider: ChatViewProvider | null = null;
+let mcpServerManager: McpServerManager | null = null;
 
 /**
  * 扩展激活入口
@@ -28,6 +30,9 @@ export function activate(context: vscode.ExtensionContext) {
     // MCP 工具通过 WebSocket 隧道提供，不再需要本地 HTTP MCP 服务器
     outputChannel.appendLine('使用 MCP 隧道模式提供工具服务');
 
+    // 创建外部 MCP 服务器管理器
+    mcpServerManager = new McpServerManager(toolRegistry, outputChannel);
+    
     // 创建 WebSocket 客户端（集成了 MCP 隧道功能）
     agentClient = new AgentClient(outputChannel, context);
     // 设置工具注册表，用于 MCP 隧道功能
@@ -57,8 +62,19 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider)
     );
 
-    // 更新工具列表视图
+    // 先显示本地工具（如果有）
     toolsViewProvider.updateTools(toolRegistry.getToolDefinitions());
+
+    // 加载并启动配置的外部 MCP 服务器（异步）
+    mcpServerManager.loadFromConfig().then(() => {
+        // MCP 服务器启动完成后，更新工具列表视图
+        if (toolsViewProvider && toolRegistry) {
+            toolsViewProvider.updateTools(toolRegistry.getToolDefinitions());
+            outputChannel?.appendLine(`[Extension] MCP 服务器加载完成，当前工具数: ${toolRegistry.getToolNames().length}`);
+        }
+    }).catch(error => {
+        outputChannel?.appendLine(`[Extension] 加载 MCP 服务器失败: ${error}`);
+    });
 
     // 注册命令：显示状态（显示 MCP 隧道状态）
     const showStatusCmd = vscode.commands.registerCommand('aiat.showStatus', () => {
@@ -243,10 +259,45 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // 监听配置变化
-    const configChangeListener = vscode.workspace.onDidChangeConfiguration(e => {
+    const configChangeListener = vscode.workspace.onDidChangeConfiguration(async e => {
         if (e.affectsConfiguration('aiat')) {
             configViewProvider?.refresh();
             updateStatusView();
+            
+            // 响应工具来源配置变化
+            if (e.affectsConfiguration('aiat.toolSource') && toolRegistry) {
+                const config = vscode.workspace.getConfiguration('aiat');
+                const toolSource = config.get<string>('toolSource', 'local');
+                
+                outputChannel?.appendLine(`[Extension] 工具来源配置已更改为: ${toolSource}`);
+                
+                // 重要：先停止所有 MCP 服务器，再处理本地工具，最后启动新的 MCP 服务器
+                // 这样可以避免同名工具被误删的问题
+                
+                // 1. 先停止所有 MCP 服务器（会注销 MCP 工具）
+                if (mcpServerManager) {
+                    await mcpServerManager.stopAll();
+                }
+                
+                // 2. 注销本地工具（如果之前注册过）
+                toolRegistry.unregisterLocalTools();
+                
+                // 3. 根据新配置注册本地工具或启动 MCP 服务器
+                if (toolSource === 'local') {
+                    toolRegistry.reloadLocalTools();
+                } else if (toolSource === 'builtin-mcp' && mcpServerManager) {
+                    await mcpServerManager.loadFromConfig();
+                }
+                // toolSource === 'none' 时不需要做任何事
+                
+                // 4. 更新工具列表视图
+                if (toolsViewProvider) {
+                    toolsViewProvider.updateTools(toolRegistry.getToolDefinitions());
+                }
+                
+                outputChannel?.appendLine(`[Extension] 工具重新加载完成，当前工具数: ${toolRegistry.getToolNames().length}`);
+                outputChannel?.appendLine(`[Extension] 工具列表: ${toolRegistry.getToolNames().join(', ')}`);
+            }
         }
     });
 
@@ -345,6 +396,17 @@ export async function deactivate(): Promise<void> {
                 logger.warn('Error disposing agent client', error);
             }
             agentClient = null;
+        }
+
+        // 停止所有外部 MCP 服务器
+        if (mcpServerManager) {
+            try {
+                await mcpServerManager.stopAll();
+                mcpServerManager.dispose();
+            } catch (error) {
+                logger.warn('Error stopping MCP servers', error);
+            }
+            mcpServerManager = null;
         }
 
         // MCP 隧道会随 agentClient 一起销毁，不需要单独停止

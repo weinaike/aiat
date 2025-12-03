@@ -2,7 +2,7 @@
   "name": "aiat",
   "displayName": "AIAT",
   "description": "AI Agent Toolkit - AgentFlow 智能体服务客户端",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "publisher": "weinaike",
   "repository": {
     "type": "git",
@@ -83,44 +83,68 @@
     "configuration": {
       "title": "AIAT",
       "properties": {
-        "aiat.mcpTunnel.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "启用 MCP 隧道模式，通过公网服务器中转 MCP 请求，无需开放本地端口。",
-          "order": 1
-        },
-        "aiat.enableFileOperations": {
-          "type": "boolean",
-          "default": true,
-          "description": "启用文件操作工具"
-        },
-        "aiat.enableCodeSearch": {
-          "type": "boolean",
-          "default": true,
-          "description": "启用代码搜索工具"
-        },
-        "aiat.enableTerminal": {
-          "type": "boolean",
-          "default": true,
-          "description": "启用终端操作工具"
-        },
         "aiat.agentServer.url": {
           "type": "string",
           "default": "ws://agent-flow.dev.csst.lab.zverse.space:32080",
           "description": "后端智能体服务地址（WebSocket）",
-          "order": 2
+          "order": 1
         },
         "aiat.agentServer.autoConnect": {
           "type": "boolean",
           "default": true,
           "description": "扩展激活时自动连接智能体服务",
-          "order": 3
+          "order": 2
         },
-        "aiat.logging.enableDebugLogging": {
-          "type": "boolean",
-          "default": false,
-          "description": "启用调试模式下的详细日志输出",
-          "order": 10
+        "aiat.toolSource": {
+          "type": "string",
+          "default": "local",
+          "enum": ["local", "builtin-mcp", "none"],
+          "enumDescriptions": [
+            "使用本地工具（插件内置的轻量工具）",
+            "使用内置 MCP 服务器（DesktopCommanderMCP，功能更强大）",
+            "不启用任何内置工具（仅使用自定义 MCP 服务器）"
+          ],
+          "description": "选择工具来源：local=本地工具（默认），builtin-mcp=DesktopCommanderMCP，none=无",
+          "order": 3
+        },        
+        "aiat.mcpServers.custom": {
+          "type": "array",
+          "default": [],
+          "description": "自定义 MCP 服务器配置列表，用于集成其他第三方 MCP 工具",
+          "order": 4,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "服务器名称（用于工具前缀）"
+              },
+              "command": {
+                "type": "string",
+                "description": "启动命令（如 npx, node, python 等）"
+              },
+              "args": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "命令参数"
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": { "type": "string" },
+                "description": "环境变量"
+              },
+              "cwd": {
+                "type": "string",
+                "description": "工作目录"
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "是否启用此服务器"
+              }
+            },
+            "required": ["name", "command"]
+          }
         }
       }
     },

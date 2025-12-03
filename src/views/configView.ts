@@ -26,7 +26,6 @@ export class ConfigViewProvider implements vscode.TreeDataProvider<ConfigItem> {
     getChildren(): ConfigItem[] {
         const config = vscode.workspace.getConfiguration('aiat');
         const agentServerUrl = config.get<string>('agentServer.url', 'ws://agent-flow.dev.csst.lab.zverse.space:32080');
-        const mcpTunnelEnabled = config.get<boolean>('mcpTunnel.enabled', true);
         const workspaceRoot = this.getDefaultCodebase();
 
         // 获取workspace名称
@@ -35,7 +34,7 @@ export class ConfigViewProvider implements vscode.TreeDataProvider<ConfigItem> {
         return [
             // 服务器配置组
             new ConfigItem('智能体服务', agentServerUrl, 'agent_server', 'cloud'),
-            new ConfigItem('MCP 隧道', mcpTunnelEnabled ? '已启用' : '已禁用', 'mcp_tunnel', mcpTunnelEnabled ? 'check' : 'close'),
+            new ConfigItem('MCP 隧道', '已启用（必需）', 'mcp_tunnel', 'check'),
             // 工作区信息组
             new ConfigItem('工作区名称', workspaceName, 'workspace_name', 'project'),
             new ConfigItem('代码库路径', workspaceRoot || '(未打开)', 'codebase', 'folder-opened'),

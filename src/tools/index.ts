@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { ToolHandler, ToolDefinition } from '../types';
 import { ReadFileTool, WriteFileTool, ListDirectoryTool, DeleteFileTool } from './fileTools';
 import { TextSearchTool, FileSearchTool, SymbolSearchTool, GetEnvironmentTool } from './searchTools';
@@ -8,6 +9,7 @@ import { RunCommandTool, GetDiagnosticsTool, OpenFileTool } from './terminalTool
  */
 export class ToolRegistry {
     private tools: Map<string, ToolHandler> = new Map();
+    private localToolsRegistered: boolean = false;
 
     constructor() {
         this.registerDefaultTools();
@@ -17,6 +19,29 @@ export class ToolRegistry {
      * 注册默认工具
      */
     private registerDefaultTools(): void {
+        // 检查工具来源配置
+        const config = vscode.workspace.getConfiguration('aiat');
+        const toolSource = config.get<string>('toolSource', 'local');
+        
+        console.log(`[ToolRegistry] toolSource = ${toolSource}`);
+        
+        // 只有选择 local 时才注册本地工具
+        if (toolSource !== 'local') {
+            console.log('[ToolRegistry] 未选择本地工具，跳过注册');
+            return;
+        }
+
+        this.registerLocalTools();
+    }
+
+    /**
+     * 注册本地工具
+     */
+    private registerLocalTools(): void {
+        if (this.localToolsRegistered) {
+            return;
+        }
+
         // 文件操作工具
         this.register(new ReadFileTool());
         this.register(new WriteFileTool());
@@ -33,6 +58,46 @@ export class ToolRegistry {
         this.register(new RunCommandTool());
         this.register(new GetDiagnosticsTool());
         this.register(new OpenFileTool());
+
+        this.localToolsRegistered = true;
+        console.log(`[ToolRegistry] 已注册 ${this.tools.size} 个本地工具`);
+    }
+
+    /**
+     * 注销所有本地工具
+     */
+    unregisterLocalTools(): void {
+        if (!this.localToolsRegistered) {
+            return; // 本地工具未注册，无需注销
+        }
+        
+        const localToolNames = [
+            'read_file', 'write_file', 'list_directory', 'delete_file',
+            'text_search', 'glob_search', 'symbol_search', 'get_environment',
+            'run_command', 'get_diagnostics', 'open_file'
+        ];
+        
+        for (const name of localToolNames) {
+            this.tools.delete(name);
+        }
+        this.localToolsRegistered = false;
+        console.log('[ToolRegistry] 已注销所有本地工具');
+    }
+
+    /**
+     * 根据配置重新加载本地工具
+     */
+    reloadLocalTools(): void {
+        const config = vscode.workspace.getConfiguration('aiat');
+        const toolSource = config.get<string>('toolSource', 'local');
+        
+        console.log(`[ToolRegistry] reloadLocalTools: toolSource=${toolSource}, localToolsRegistered=${this.localToolsRegistered}`);
+        
+        if (toolSource === 'local') {
+            // 强制重新注册本地工具
+            this.localToolsRegistered = false;
+            this.registerLocalTools();
+        }
     }
 
     /**

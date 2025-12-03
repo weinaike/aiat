@@ -20,23 +20,12 @@ export class Logger {
     }
 
     /**
-     * 获取配置值
-     */
-    private getConfig<T>(key: string, defaultValue: T): T {
-        return vscode.workspace.getConfiguration('aiat').get<T>(key, defaultValue);
-    }
-
-  
-    /**
-     * 调试日志 - 用于开发调试信息
+     * 调试日志 - 用于开发调试信息，输出到 AIAT Debug 面板
      */
     public debug(message: string, data?: any): void {
-        if (this.getConfig('logging.enableDebugLogging', false)) {
-            const timestamp = new Date().toISOString();
-            const logMessage = data ? `${message} ${JSON.stringify(data, null, 2)}` : message;
-            console.log(`[${timestamp}] [Debug] ${logMessage}`);
-            this.outputChannel.appendLine(`[${timestamp}] [Debug] ${logMessage}`);
-        }
+        const timestamp = new Date().toISOString();
+        const logMessage = data ? `${message} ${JSON.stringify(data, null, 2)}` : message;
+        this.outputChannel.appendLine(`[${timestamp}] [Debug] ${logMessage}`);
     }
 
     /**
